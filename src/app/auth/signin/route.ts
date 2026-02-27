@@ -5,6 +5,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { signJWT } from '@/lib/jwt'
 import { setAuthCookie } from '@/lib/cookies'
 
+export const runtime = 'nodejs'
+
 export async function POST(request: NextRequest) {
   try {
     const { email, password } = await request.json()
@@ -61,7 +63,7 @@ export async function POST(request: NextRequest) {
     })
 
     // Set JWT cookie
-    setAuthCookie(response, token)
+    setAuthCookie(response, token, jwtPayload)
 
     return response
   } catch (error) {

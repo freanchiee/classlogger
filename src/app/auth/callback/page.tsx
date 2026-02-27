@@ -78,7 +78,7 @@ function AuthCallbackContent() {
     }
 
     const processAuthenticatedUser = async (
-      session: { user: { id: string; email?: string | null } }, 
+      session: { access_token?: string; user: { id: string; email?: string | null } },
       role: string | null
     ) => {
       try {
@@ -159,7 +159,7 @@ function AuthCallbackContent() {
         setStatus('Creating authentication cookies...')
         
         // Validate required user data
-        if (!session.user?.id || !session.user?.email) {
+        if (!session.user?.id || !session.user?.email || !session.access_token) {
           throw new Error('Invalid user session data')
         }
 
@@ -174,14 +174,25 @@ function AuthCallbackContent() {
             userId: session.user.id,
             email: session.user.email,
             name: profile.full_name,
-            role: profile.role
+            role: profile.role,
+            accessToken: session.access_token
           })
         })
 
         if (!response.ok) {
-          const errorText = await response.text()
-          console.error('❌ JWT creation failed:', errorText)
-          throw new Error(`Failed to create cookies: ${errorText}`)
+          const rawError = await response.text()
+          let errorMessage = rawError
+
+          try {
+            const parsed = JSON.parse(rawError) as { error?: string; message?: string }
+            errorMessage = parsed.error || parsed.message || rawError
+          } catch {
+            // Keep raw text when response is not JSON
+          }
+
+          const fallbackMessage = errorMessage?.trim() || `Request failed with status ${response.status}`
+          console.error('❌ JWT creation failed:', fallbackMessage)
+          throw new Error(`Failed to create cookies: ${fallbackMessage}`)
         }
 
         console.log('✅ JWT cookies created successfully')

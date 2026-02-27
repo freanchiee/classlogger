@@ -1,63 +1,75 @@
-// src/app/api/auth/create-jwt/route.ts
-
 import { NextRequest, NextResponse  } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { signJWT } from '@/lib/jwt'
 import { setAuthCookie } from '@/lib/cookies'
 
+export const runtime = 'nodejs'
+
 export async function POST(request: NextRequest) {
   try {
+    console.log('🔄 Creating JWT cookie for OAuth user...')
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-    if (!supabaseUrl || !supabaseServiceKey) {
-      console.error('❌ Missing Supabase env vars for JWT creation')
+    // Get data from request
+    const { userId, email, name, role, accessToken } = await request.json()
+
+    // Validate required fields
+    if (!userId || !email || !role || !accessToken) {
+      console.error('❌ Missing required fields')
       return NextResponse.json(
-        { error: 'Missing Supabase environment variables.' },
+        { error: 'Missing required fields: userId, email, role, accessToken' },
+        { status: 400 }
+      )
+    }
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error('❌ Missing Supabase public env vars')
+      return NextResponse.json(
+        { error: 'Missing Supabase environment variables' },
         { status: 500 }
       )
     }
 
-    // Initialize Supabase client inside function to avoid build-time env var issues
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
-    console.log('🔄 Creating JWT cookie for OAuth user...')
-    
-    // Get data from request
-    const { userId, email, name, role } = await request.json()
-    
-    // Validate required fields
-    if (!userId || !email || !role) {
-      console.error('❌ Missing required fields')
+    if (!['teacher', 'student', 'parent'].includes(role)) {
       return NextResponse.json(
-        { error: 'Missing required fields: userId, email, role' },
+        { error: 'Invalid role' },
         { status: 400 }
       )
     }
-    
-    // Create Supabase client with service role for verification
 
-    // Try to verify the user exists in the database (optional check)
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('id, email, role')
-      .eq('id', userId)
-      .single()
-    
-    if (profile) {
-      // If profile exists, verify the email matches
-      if (profile.email !== email) {
-        console.error('❌ Email mismatch')
-        return NextResponse.json(
-          { error: 'Email mismatch' },
-          { status: 401 }
-        )
+    // Validate user identity using the OAuth access token from the callback session.
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
       }
-      console.log('✅ Profile verified in database:', profile.email, profile.role)
-    } else {
-      // Profile doesn't exist yet, but that's okay for OAuth flow
-      console.log('⚠️ Profile not found in database, but proceeding with JWT creation for OAuth user')
-      console.log('📋 Profile error details:', profileError)
+    })
+    const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken)
+
+    if (authError || !user) {
+      console.error('❌ Invalid Supabase access token:', authError)
+      return NextResponse.json(
+        { error: 'User not authenticated' },
+        { status: 401 }
+      )
+    }
+
+    // Never mint JWTs for another account.
+    if (userId !== user.id) {
+      console.error('❌ User ID mismatch')
+      return NextResponse.json(
+        { error: 'User ID mismatch' },
+        { status: 401 }
+      )
+    }
+
+    if (email !== user.email) {
+      console.error('❌ User email mismatch')
+      return NextResponse.json(
+        { error: 'User email mismatch' },
+        { status: 401 }
+      )
     }
 
     console.log('✅ Creating JWT for user:', email, role)
@@ -67,7 +79,7 @@ export async function POST(request: NextRequest) {
       userId,
       email,
       role: role as 'teacher' | 'student' | 'parent',
-      name,
+      name: name || user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'User',
     }
 
     // Sign JWT
@@ -80,7 +92,7 @@ export async function POST(request: NextRequest) {
     })
 
     // Set JWT cookie
-    setAuthCookie(response, token)
+    setAuthCookie(response, token, jwtPayload)
 
     console.log('✅ JWT cookie set successfully')
     return response
@@ -88,7 +100,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('❌ JWT creation error:', error)
     return NextResponse.json(
-      { error: 'Failed to create JWT cookie' },
+      { error: error instanceof Error ? error.message : 'Failed to create JWT cookie' },
       { status: 500 }
     )
   }

@@ -12,17 +12,55 @@ const COOKIE_OPTIONS = {
   path: '/',
 }
 
-export function setAuthCookie(response: NextResponse, token: string) {
-  // Extract user data from JWT token
-  try {
-    const base64Url = token.split('.')[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-    }).join(''));
+type AuthCookieUser = {
+  userId: string
+  name: string
+  email: string
+  role: 'teacher' | 'student' | 'parent'
+}
 
-    const payload = JSON.parse(jsonPayload);
-    const { userId, name, email, role } = payload;
+function decodeBase64ToUtf8(base64: string): string {
+  if (typeof atob === 'function') {
+    return atob(base64)
+  }
+  if (typeof Buffer !== 'undefined') {
+    return Buffer.from(base64, 'base64').toString('utf8')
+  }
+  throw new Error('No base64 decoder available')
+}
+
+function decodeJwtPayload(token: string): AuthCookieUser | null {
+  try {
+    const base64Url = token.split('.')[1]
+    if (!base64Url) return null
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=')
+    const jsonPayload = decodeBase64ToUtf8(padded)
+    const parsed = JSON.parse(jsonPayload) as Partial<AuthCookieUser>
+
+    if (!parsed.userId || !parsed.email || !parsed.role) {
+      return null
+    }
+
+    return {
+      userId: parsed.userId,
+      name: parsed.name || parsed.email.split('@')[0] || 'User',
+      email: parsed.email,
+      role: parsed.role
+    }
+  } catch {
+    return null
+  }
+}
+
+export function setAuthCookie(response: NextResponse, token: string, userFromRoute?: AuthCookieUser) {
+  try {
+    const user = userFromRoute || decodeJwtPayload(token)
+    if (!user) {
+      throw new Error('Unable to decode user payload for cookie creation')
+    }
+    const { userId, name, email, role } = user
+
   // Set the main auth cookie (httpOnly: false for extension access)
   response.cookies.set('classlogger_auth', token, {
     httpOnly: false, // Allow JavaScript access for extensions
@@ -60,7 +98,7 @@ export function setAuthCookie(response: NextResponse, token: string) {
     return response
   } catch (error) {
     console.error('❌ Error parsing JWT for cookie creation:', error)
-    return response
+    throw error
   }
 }
 
@@ -120,9 +158,11 @@ export function getTeacherIdFromRequest(request: NextRequest): string | null {
     const authCookie = request.cookies.get(COOKIE_NAME)
     if (authCookie?.value) {
       try {
-        const parts = authCookie.value.split('.');
+        const parts = authCookie.value.split('.')
         if (parts.length === 3) {
-          const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+          const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+          const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=')
+          const payload = JSON.parse(decodeBase64ToUtf8(padded))
           return payload.userId || payload.teacher_id || payload.teacherId
         }
       } catch {

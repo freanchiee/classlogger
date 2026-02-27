@@ -11,7 +11,10 @@ export function middleware(request: NextRequest) {
     '/',
     '/auth/signin',
     '/auth/signup',
+    '/auth/callback',
     '/auth/extension-callback',
+    '/api/auth/create-jwt',
+    '/api/auth/me',
     '/api/auth/signin',
     '/api/auth/signup',
     '/api/extension/verify', // For extension auth
@@ -23,7 +26,14 @@ export function middleware(request: NextRequest) {
     '/api/teacher/extension',
   ]
 
-  if (publicRoutes.some(route => pathname.startsWith(route))) {
+  const isPublicRoute = publicRoutes.some((route) => {
+    if (route === '/') {
+      return pathname === '/'
+    }
+    return pathname === route || pathname.startsWith(`${route}/`)
+  })
+
+  if (isPublicRoute) {
     return NextResponse.next()
   }
 

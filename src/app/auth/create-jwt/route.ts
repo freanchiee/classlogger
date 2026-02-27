@@ -4,6 +4,8 @@ import { cookies } from 'next/headers'
 import { signJWT } from '@/lib/jwt'
 import { setAuthCookie } from '@/lib/cookies'
 
+export const runtime = 'nodejs'
+
 export async function POST(request: NextRequest) {
   try {
     console.log('🔄 Creating JWT cookie for OAuth user...')
@@ -52,7 +54,7 @@ export async function POST(request: NextRequest) {
     })
 
     // Set JWT cookie
-    setAuthCookie(response, token)
+    setAuthCookie(response, token, jwtPayload)
 
     console.log('✅ JWT cookie set successfully')
     return response
