@@ -44,7 +44,7 @@ export function middleware(request: NextRequest) {
     if (extensionRoutes.some(route => pathname.startsWith(route))) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
-    return NextResponse.redirect(new URL('/auth/signin', request.url))
+    return NextResponse.redirect(new URL('/', request.url))
   }
 
   // Verify JWT
@@ -53,7 +53,7 @@ export function middleware(request: NextRequest) {
     if (extensionRoutes.some(route => pathname.startsWith(route))) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
-    return NextResponse.redirect(new URL('/auth/signin', request.url))
+    return NextResponse.redirect(new URL('/', request.url))
   }
 
   // Add user info to headers for use in API routes
