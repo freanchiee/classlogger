@@ -67,6 +67,11 @@ export async function POST(request: NextRequest) {
       : screenshot_data
     const imageBuffer = Buffer.from(base64Payload, 'base64')
 
+    // Detect image type from the data URL prefix (we send JPEG now)
+    const mimeMatch = /^data:(image\/[a-z]+);base64/.exec(screenshot_data)
+    const contentType = mimeMatch ? mimeMatch[1] : 'image/jpeg'
+    const ext = contentType === 'image/png' ? 'png' : 'jpg'
+
     // Ensure the storage bucket exists (idempotent — ignores "already exists")
     try {
       await supabase.storage.createBucket(SCREENSHOT_BUCKET, {
@@ -77,14 +82,14 @@ export async function POST(request: NextRequest) {
       // Bucket likely already exists — safe to ignore
     }
 
-    const fileName = `${class_log_id}/${Date.now()}-${screenshot_type}.png`
+    const fileName = `${class_log_id}/${Date.now()}-${screenshot_type}.${ext}`
     let publicUrl: string | undefined
     let storedPath: string | undefined
 
     const { error: uploadError } = await supabase.storage
       .from(SCREENSHOT_BUCKET)
       .upload(fileName, imageBuffer, {
-        contentType: 'image/png',
+        contentType,
         upsert: true,
       })
 
@@ -101,7 +106,7 @@ export async function POST(request: NextRequest) {
     const screenshotMetadata: ScreenshotMetadata = {
       timestamp: timestamp || new Date().toISOString(),
       type: screenshot_type,
-      format: 'png',
+      format: ext,
       size: imageBuffer.length,
       url: publicUrl,
       path: storedPath,
