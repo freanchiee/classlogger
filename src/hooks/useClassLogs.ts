@@ -2,7 +2,7 @@
 // Custom hook for managing class logs data with proper error handling
 
 import { useCallback, useEffect, useState } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { supabase } from '@/lib/supabase'
 import { useToast } from '@/components/ui/use-toast'
 import { 
   enhanceClassLog, 
@@ -54,9 +54,9 @@ export function useClassLogs({
   refreshInterval = 30000
 }: UseClassLogsOptions): UseClassLogsReturn {
   
-  // Create Supabase client inside hook to avoid build-time env var issues
-  const supabase = createClientComponentClient()
-  
+  // Uses the shared, session-authenticated Supabase client from @/lib/supabase
+  // (createClientComponentClient was unauthenticated → RLS returned 0 rows).
+
   // State
   const [classLogs, setClassLogs] = useState<EnhancedClassLog[]>([])
   const [classFiles, setClassFiles] = useState<Record<string, ClassFile[]>>({})
@@ -349,16 +349,45 @@ export function useClassLogs({
     }
   }, [teacherId, selectedDate, fetchClassLogs, fetchStats])
 
-  // Auto-refresh for live classes
+  // Realtime pub/sub: instantly reflect class start/end without polling.
+  // Subscribes to all changes on this teacher's class_logs rows.
+  useEffect(() => {
+    if (!teacherId) return
+
+    const channel = supabase
+      .channel(`class_logs_teacher_${teacherId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',                 // INSERT (class started), UPDATE (ended), DELETE
+          schema: 'public',
+          table: 'class_logs',
+          filter: `teacher_id=eq.${teacherId}`,
+        },
+        () => {
+          // Any change → re-pull the day's logs + the headline stats
+          fetchClassLogs()
+          fetchStats()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [teacherId, fetchClassLogs, fetchStats])
+
+  // Fallback polling while a class is live (in case realtime drops)
   useEffect(() => {
     if (!autoRefresh || stats.liveClasses === 0) return
 
     const interval = setInterval(() => {
+      fetchClassLogs()
       fetchStats()
     }, refreshInterval)
 
     return () => clearInterval(interval)
-  }, [autoRefresh, refreshInterval, stats.liveClasses, fetchStats])
+  }, [autoRefresh, refreshInterval, stats.liveClasses, fetchClassLogs, fetchStats])
 
   return {
     // Data
