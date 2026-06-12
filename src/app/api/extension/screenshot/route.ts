@@ -8,7 +8,11 @@ interface ScreenshotMetadata {
   type: string
   format: string
   size: number
+  url?: string
+  path?: string
 }
+
+const SCREENSHOT_BUCKET = 'class-screenshots'
 
 interface ScreenshotRequestBody {
   class_log_id: string
@@ -56,12 +60,51 @@ export async function POST(request: NextRequest) {
       }, { status: 404 })
     }
 
+    // ===== Upload the actual image to Supabase Storage =====
+    // Convert the base64 data URL to a binary buffer
+    const base64Payload = screenshot_data.includes(',')
+      ? screenshot_data.split(',')[1]
+      : screenshot_data
+    const imageBuffer = Buffer.from(base64Payload, 'base64')
+
+    // Ensure the storage bucket exists (idempotent — ignores "already exists")
+    try {
+      await supabase.storage.createBucket(SCREENSHOT_BUCKET, {
+        public: true,
+        fileSizeLimit: 10485760, // 10 MB
+      })
+    } catch {
+      // Bucket likely already exists — safe to ignore
+    }
+
+    const fileName = `${class_log_id}/${Date.now()}-${screenshot_type}.png`
+    let publicUrl: string | undefined
+    let storedPath: string | undefined
+
+    const { error: uploadError } = await supabase.storage
+      .from(SCREENSHOT_BUCKET)
+      .upload(fileName, imageBuffer, {
+        contentType: 'image/png',
+        upsert: true,
+      })
+
+    if (uploadError) {
+      console.error('⚠️ Screenshot image upload failed (saving metadata only):', uploadError.message)
+    } else {
+      storedPath = fileName
+      const { data: pub } = supabase.storage.from(SCREENSHOT_BUCKET).getPublicUrl(fileName)
+      publicUrl = pub?.publicUrl
+      console.log('🖼️ Screenshot uploaded to storage:', publicUrl)
+    }
+
     // Prepare screenshot metadata
     const screenshotMetadata: ScreenshotMetadata = {
       timestamp: timestamp || new Date().toISOString(),
       type: screenshot_type,
       format: 'png',
-      size: screenshot_data.length
+      size: imageBuffer.length,
+      url: publicUrl,
+      path: storedPath,
     }
 
     // Update class log attachments with screenshot info
@@ -102,6 +145,7 @@ export async function POST(request: NextRequest) {
       success: true,
       message: 'Screenshot stored successfully',
       screenshot_id: screenshots.length,
+      screenshot_url: publicUrl,
       metadata: screenshotMetadata,
       total_screenshots: screenshots.length
     })
