@@ -3,7 +3,7 @@
 
 import React from 'react';
 
-export type PaymentStatus = 'paid' | 'partial' | 'unpaid';
+export type PaymentStatus = 'paid' | 'partial' | 'unpaid' | 'pending' | 'error';
 
 interface PaymentStatusBadgeProps {
   status: PaymentStatus;
@@ -38,6 +38,18 @@ const statusConfigs: Record<PaymentStatus, StatusConfig> = {
     bgColor: 'bg-red-100',
     textColor: 'text-red-900', // Darker for better contrast
     icon: '✗'
+  },
+  pending: {
+    label: 'Pending',
+    bgColor: 'bg-gray-100',
+    textColor: 'text-gray-700',
+    icon: '⏳'
+  },
+  error: {
+    label: 'Error',
+    bgColor: 'bg-orange-100',
+    textColor: 'text-orange-900',
+    icon: '!'
   }
 };
 
@@ -54,7 +66,7 @@ export const PaymentStatusBadge: React.FC<PaymentStatusBadgeProps> = ({
   showCredits = false,
   size = 'md'
 }) => {
-  const config = statusConfigs[status];
+  const config = statusConfigs[status] ?? statusConfigs.pending;
   const sizeClass = sizeClasses[size];
 
   const displayText = showCredits && creditsDeducted > 0 
@@ -122,8 +134,8 @@ export const PaymentStatusIcon: React.FC<{
   status: PaymentStatus;
   className?: string;
 }> = ({ status, className = '' }) => {
-  const config = statusConfigs[status];
-  
+  const config = statusConfigs[status] ?? statusConfigs.pending;
+
   return (
     <span
       className={`
