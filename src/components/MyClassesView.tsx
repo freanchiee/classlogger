@@ -53,17 +53,20 @@ const StatsCard: React.FC<StatsCardProps> = ({
 }) => {
   const gradients = [
     'from-blue-500 via-blue-600 to-indigo-700',
-    'from-emerald-500 via-green-600 to-teal-700', 
+    'from-emerald-500 via-green-600 to-teal-700',
     'from-purple-500 via-violet-600 to-purple-700',
     'from-orange-500 via-red-500 to-pink-600',
     'from-cyan-500 via-teal-600 to-blue-700',
     'from-red-500 via-pink-600 to-rose-700'
   ]
-  
-  const gradient = gradients[Math.floor(Math.random() * gradients.length)]
+
+  // Deterministic gradient per card title — stable across re-renders
+  // (Math.random made tiles flicker to different colors on every render).
+  const hash = (title || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0)
+  const gradient = gradients[hash % gradients.length]
   
   return (
-    <div className={`group relative overflow-hidden ${isAnimated ? 'animate-pulse' : ''}`}>
+    <div className={`group relative overflow-hidden rounded-2xl shadow-[0_8px_30px_rgba(2,6,23,0.12)] ${isAnimated ? 'animate-pulse' : ''}`}>
       {/* Animated background gradient */}
       <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-90 transition-all duration-500 group-hover:opacity-100 group-hover:scale-105`} />
       

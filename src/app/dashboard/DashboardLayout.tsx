@@ -123,7 +123,7 @@ export default function DashboardLayout({ children, user }: DashboardLayoutProps
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/40 to-purple-50/40">
       {/* Mobile Header */}
       <div className="lg:hidden bg-white border-b border-gray-200 px-4 py-3">
         <div className="flex items-center justify-between">
@@ -149,7 +149,7 @@ export default function DashboardLayout({ children, user }: DashboardLayoutProps
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } lg:translate-x-0 fixed lg:static inset-y-0 left-0 z-50 ${
           isCollapsed ? 'w-16' : 'w-64'
-        } bg-white border-r border-gray-200 transition-all duration-200 ease-in-out`}>
+        } bg-white/70 backdrop-blur-xl border-r border-white/60 transition-all duration-200 ease-in-out`}>
           
           {/* Logo */}
           <div className="p-6 border-b border-gray-200">
@@ -215,9 +215,9 @@ export default function DashboardLayout({ children, user }: DashboardLayoutProps
                   className={`w-full flex items-center ${
                     isCollapsed ? 'justify-center px-2' : 'space-x-3 px-3'
                   } py-2 rounded-lg text-left transition-colors ${
-                    itemIsActive 
-                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
-                      : 'text-gray-700 hover:bg-gray-100'
+                    itemIsActive
+                      ? 'bg-gradient-to-r from-indigo-500/15 to-purple-500/15 text-indigo-700 border border-indigo-200/70 shadow-sm'
+                      : 'text-gray-700 hover:bg-white/60'
                   }`}
                   title={isCollapsed ? item.label : undefined}
                 >
