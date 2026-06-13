@@ -60,18 +60,16 @@ const WIDGET_STYLE = `
   .fcl-share{width:100%;padding:9px;border:none;border-radius:11px;font-size:13px;font-weight:700;cursor:pointer;color:#fff;background:rgba(37,211,102,0.95);}
   .fcl-tools{display:none;flex-direction:column;gap:6px;border-top:1px solid rgba(255,255,255,0.2);padding-top:8px;}
   .fcl-status{font-size:11.5px;text-align:center;opacity:0.95;min-height:15px;}
-  /* minimized slim bar */
-  .fcl-min{display:none;align-items:center;gap:9px;height:100%;}
-  .fcl-min .fcl-timer{flex:1;font-size:18px;padding:4px 8px;}
-  #fcl-root[data-min="1"]{padding:9px 11px;}
-  #fcl-root[data-min="1"] .fcl-full{display:none;}
-  #fcl-root[data-min="1"] .fcl-min{display:flex;}
+  /* minimized slim bar: just the timer + expand */
+  .fcl-min{align-items:center;gap:10px;height:100%;cursor:pointer;}
+  .fcl-min .fcl-timer{flex:1;font-size:20px;padding:4px 10px;margin:0;}
+  #fcl-root[data-min="1"]{padding:8px 11px;}
 `
 
 const WIDGET_HTML = (students: StudentOption[]) => `
   <style>${WIDGET_STYLE}</style>
   <div id="fcl-root" data-min="0">
-    <div class="fcl-full" style="display:flex;flex-direction:column;gap:8px;height:100%;">
+    <div id="fcl-full" class="fcl-full" style="display:flex;flex-direction:column;gap:8px;height:100%;">
       <div class="fcl-hdr">
         <div class="fcl-title">🎓 ClassLogger</div>
         <button id="fcl-minimize" class="fcl-icon" title="Minimize">▁</button>
@@ -97,10 +95,9 @@ const WIDGET_HTML = (students: StudentOption[]) => `
       <button id="fcl-share" class="fcl-share" style="display:none;">📲 Share to WhatsApp</button>
       <div id="fcl-status" class="fcl-status">Pick a student to begin</div>
     </div>
-    <div class="fcl-min">
+    <div id="fcl-min" class="fcl-min" style="display:none;" title="Click to expand">
       <span style="font-size:15px;">🎓</span>
       <div id="fcl-timer-min" class="fcl-timer">00:00</div>
-      <button id="fcl-shot-min" class="fcl-icon" title="Screenshot" style="width:30px;height:30px;">📸</button>
       <button id="fcl-expand" class="fcl-icon" title="Expand" style="width:30px;height:30px;">▢</button>
     </div>
   </div>
@@ -144,11 +141,15 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
 
   const minimize = useCallback(() => {
     const root = $('fcl-root'); if (root) root.setAttribute('data-min', '1')
+    const full = $('fcl-full'); if (full) full.style.display = 'none'
+    const min = $('fcl-min'); if (min) min.style.display = 'flex'
     resizeWidget(MIN_W, MIN_H)
   }, [$, resizeWidget])
 
   const expand = useCallback(() => {
     const root = $('fcl-root'); if (root) root.setAttribute('data-min', '0')
+    const full = $('fcl-full'); if (full) full.style.display = 'flex'
+    const min = $('fcl-min'); if (min) min.style.display = 'none'
     resizeWidget(FULL_W, FULL_H)
   }, [$, resizeWidget])
 
@@ -358,11 +359,11 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
     doc.getElementById('fcl-start')?.addEventListener('click', handleStart)
     doc.getElementById('fcl-end')?.addEventListener('click', handleEnd)
     doc.getElementById('fcl-shot')?.addEventListener('click', handleScreenshot)
-    doc.getElementById('fcl-shot-min')?.addEventListener('click', handleScreenshot)
     doc.getElementById('fcl-share')?.addEventListener('click', handleShare)
     doc.getElementById('fcl-link-add')?.addEventListener('click', handleAddLink)
     doc.getElementById('fcl-minimize')?.addEventListener('click', minimize)
     doc.getElementById('fcl-expand')?.addEventListener('click', expand)
+    doc.getElementById('fcl-min')?.addEventListener('click', expand)
     const uploadBtn = doc.getElementById('fcl-upload')
     const fileInput = doc.getElementById('fcl-file') as HTMLInputElement | null
     uploadBtn?.addEventListener('click', () => fileInput?.click())
