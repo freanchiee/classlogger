@@ -32,6 +32,15 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+import.env
+
+# local agent tooling / MCP config (never commit — may contain secrets)
+.claude/
+.agents/
+.continue/
+.kiro/
+.mcp.json
+skills-lock.json
 
 # vercel
 .vercel
