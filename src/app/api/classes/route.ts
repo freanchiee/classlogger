@@ -81,11 +81,14 @@ if (extractedTeacherId) {
 
     console.log('📚 Class start requested:', { teacher_id, student_email, manual_override, isExtension: !!authHeader?.includes('extension_') })
 
-    // 1. Validate required fields
-    if (!teacher_id || !student_email || !meetUrlToUse) {
-      return NextResponse.json({ 
+    // 1. Validate required fields.
+    // Web (no-extension) logging: the teacher selects a student, so enrollment_id
+    // alone is enough — student_email and Meet URL are derived from the enrollment.
+    // Extension/legacy logging: needs student_email + Meet URL.
+    if (!teacher_id || (!enrollment_id && (!student_email || !meetUrlToUse))) {
+      return NextResponse.json({
         success: false,
-        error: 'Missing required fields: teacher_id, student_email, google_meet_url/meetUrl' 
+        error: 'Missing required fields: teacher_id, and either enrollment_id or (student_email + google_meet_url/meetUrl)'
       }, { status: 400 })
     }
 
@@ -171,18 +174,22 @@ if (extractedTeacherId) {
 
     // 3. Validate teacher permissions
     if (enrollment.classes?.teacher_id !== finalTeacherId) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         success: false,
-        error: 'Unauthorized: You can only start classes for your own students' 
+        error: 'Unauthorized: You can only start classes for your own students'
       }, { status: 403 })
     }
+
+    // Derive the student email from the enrollment when the caller didn't pass one
+    // (web dropdown flow only sends enrollment_id).
+    const effectiveStudentEmail = student_email || enrollment.profiles?.email || ''
 
     // 4. Check if class is already active
     const today = new Date().toISOString().split('T')[0]
     const { data: activeLog } = await supabase
       .from('class_logs')
       .select('*')
-      .eq('student_email', student_email)
+      .eq('student_email', effectiveStudentEmail)
       .eq('teacher_id', finalTeacherId)
       .eq('status', 'in_progress')
       .eq('date', today)
@@ -199,7 +206,7 @@ if (extractedTeacherId) {
     // 5. Enhanced validation (can be bypassed with manual_override or for extension)
     const isExtensionRequest = authHeader?.includes('extension_')
     if (!manual_override && !isExtensionRequest) {
-      const validationResult = await validateClassStart(enrollment, meetUrlToUse)
+      const validationResult = await validateClassStart(enrollment, meetUrlToUse || enrollment.google_meet_url || '')
       if (!validationResult.valid) {
         return NextResponse.json({ 
           success: false,
@@ -215,8 +222,8 @@ if (extractedTeacherId) {
 const classData = {
   teacher_id: finalTeacherId,
   student_name: enrollment.profiles?.full_name || 'Unknown Student',
-  student_email,
-  google_meet_link: meetUrlToUse,
+  student_email: effectiveStudentEmail,
+  google_meet_link: meetUrlToUse || enrollment.google_meet_url || null,
   subject: enrollment.classes?.subject || 'Unknown Subject',
   enrollment_id: enrollment.id
 }
@@ -528,7 +535,7 @@ interface ClassData {
   teacher_id: string
   student_name: string
   student_email: string
-  google_meet_link: string
+  google_meet_link: string | null
   subject: string
   enrollment_id?: string
 }

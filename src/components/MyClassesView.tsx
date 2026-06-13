@@ -37,6 +37,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 
 // Custom components
 import ClassCard from './ClassCard'
+import FloatingClassLogger from './FloatingClassLogger'
 
 // Hooks and utilities
 import { useClassLogs } from '@/hooks/useClassLogs'
@@ -347,6 +348,7 @@ const MyClassesView: React.FC<MyClassesViewProps> = ({ teacherId }) => {
                 </CardDescription>
               </div>
               <div className="flex items-center space-x-4">
+                <FloatingClassLogger teacherId={teacherId} />
                 <Select value={filterStatus} onValueChange={(value: typeof filterStatus) => setFilterStatus(value)}>
                   <SelectTrigger className="w-32 bg-white/20 border-white/30 text-white">
                     <SelectValue />
