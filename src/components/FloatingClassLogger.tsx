@@ -1,14 +1,12 @@
 'use client'
 
 // Web-native floating class logger — no extension required.
-// Uses the Document Picture-in-Picture API (same tech as Google Meet's mini
-// window) so the widget floats on top across tab switches. Falls back to an
-// in-page panel on browsers without Document PiP.
+// Document Picture-in-Picture (floats on top across tabs) + in-page fallback.
+// Glassmorphic, narrow, with a minimized slim-bar mode.
 //
-// Capabilities (all without an extension):
 //  - Pick an enrolled student, Start / End a class (POST/PUT /api/classes)
 //  - Screenshot the screen (Screen Capture API: prompts once, then silent)
-//  - Attach images / PDFs and drop links (POST /api/extension/save-resource)
+//  - Attach images / PDFs, drop links (POST /api/extension/save-resource)
 //  - On end, one-tap "Share to WhatsApp" with a public summary link
 
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -25,37 +23,86 @@ interface FloatingClassLoggerProps {
   teacherId: string
 }
 
+const FULL_W = 264
+const FULL_H = 430
+const MIN_W = 230
+const MIN_H = 60
+
 function escapeHtml(s: string): string {
   return (s || '').replace(/[&<>"']/g, c => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string
   ))
 }
 
+const WIDGET_STYLE = `
+  *{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system,sans-serif;}
+  html,body{height:100%;background:transparent;}
+  #fcl-root{
+    height:100vh;display:flex;flex-direction:column;gap:8px;padding:12px;color:#fff;
+    background:linear-gradient(135deg,rgba(99,102,241,0.82),rgba(139,92,246,0.82) 55%,rgba(168,85,247,0.82));
+    backdrop-filter:blur(20px) saturate(160%);-webkit-backdrop-filter:blur(20px) saturate(160%);
+    border:1px solid rgba(255,255,255,0.22);box-shadow:inset 0 1px 0 rgba(255,255,255,0.25);
+  }
+  .fcl-hdr{display:flex;align-items:center;justify-content:space-between;}
+  .fcl-title{font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px;}
+  .fcl-icon{width:24px;height:24px;border:none;border-radius:8px;cursor:pointer;font-size:12px;
+    background:rgba(255,255,255,0.18);color:#fff;display:flex;align-items:center;justify-content:center;}
+  .fcl-icon:hover{background:rgba(255,255,255,0.3);}
+  .fcl-timer{font-variant-numeric:tabular-nums;font-size:22px;font-weight:700;letter-spacing:1px;text-align:center;
+    background:rgba(255,255,255,0.14);border:1px solid rgba(255,255,255,0.2);border-radius:12px;padding:6px;}
+  .fcl-sel,.fcl-input{width:100%;padding:8px 10px;border:none;border-radius:10px;font-size:12.5px;color:#1e293b;outline:none;background:rgba(255,255,255,0.92);}
+  .fcl-row{display:flex;gap:7px;}
+  .fcl-btn{flex:1;padding:10px;border:none;border-radius:11px;font-size:13px;font-weight:700;cursor:pointer;color:#fff;}
+  .fcl-start{background:rgba(16,185,129,0.95);}
+  .fcl-end{background:rgba(239,68,68,0.95);}
+  .fcl-soft{width:100%;padding:8px;border:none;border-radius:10px;font-size:12.5px;font-weight:600;cursor:pointer;color:#fff;background:rgba(255,255,255,0.18);}
+  .fcl-soft:hover{background:rgba(255,255,255,0.28);}
+  .fcl-share{width:100%;padding:9px;border:none;border-radius:11px;font-size:13px;font-weight:700;cursor:pointer;color:#fff;background:rgba(37,211,102,0.95);}
+  .fcl-tools{display:none;flex-direction:column;gap:6px;border-top:1px solid rgba(255,255,255,0.2);padding-top:8px;}
+  .fcl-status{font-size:11.5px;text-align:center;opacity:0.95;min-height:15px;}
+  /* minimized slim bar */
+  .fcl-min{display:none;align-items:center;gap:9px;height:100%;}
+  .fcl-min .fcl-timer{flex:1;font-size:18px;padding:4px 8px;}
+  #fcl-root[data-min="1"]{padding:9px 11px;}
+  #fcl-root[data-min="1"] .fcl-full{display:none;}
+  #fcl-root[data-min="1"] .fcl-min{display:flex;}
+`
+
 const WIDGET_HTML = (students: StudentOption[]) => `
-  <div style="font-family:system-ui,-apple-system,sans-serif;color:#fff;height:100%;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);display:flex;flex-direction:column;padding:14px;gap:9px;box-sizing:border-box;overflow-y:auto;">
-    <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px;">🎓 ClassLogger</div>
-    <div id="fcl-timer" style="font-variant-numeric:tabular-nums;font-size:24px;font-weight:700;letter-spacing:1px;text-align:center;background:rgba(255,255,255,0.18);border-radius:12px;padding:6px;">00:00</div>
-    <select id="fcl-select" style="width:100%;padding:9px 10px;border:none;border-radius:10px;font-size:13px;color:#1e293b;outline:none;">
-      <option value="">Select a student…</option>
-      ${students.map(s => `<option value="${s.id}">${escapeHtml(s.student_name)}${s.subject ? ' — ' + escapeHtml(s.subject) : ''}</option>`).join('')}
-    </select>
-    <div style="display:flex;gap:8px;">
-      <button id="fcl-start" style="flex:1;padding:11px;border:none;border-radius:12px;background:#10b981;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">🟢 Start</button>
-      <button id="fcl-end" disabled style="flex:1;padding:11px;border:none;border-radius:12px;background:#ef4444;color:#fff;font-size:14px;font-weight:700;cursor:pointer;opacity:0.5;">🔴 End</button>
-    </div>
-
-    <div id="fcl-tools" style="display:none;flex-direction:column;gap:7px;border-top:1px solid rgba(255,255,255,0.25);padding-top:9px;">
-      <button id="fcl-shot" style="width:100%;padding:9px;border:none;border-radius:10px;background:rgba(255,255,255,0.22);color:#fff;font-size:13px;font-weight:600;cursor:pointer;">📸 Screenshot</button>
-      <button id="fcl-upload" style="width:100%;padding:9px;border:none;border-radius:10px;background:rgba(255,255,255,0.22);color:#fff;font-size:13px;font-weight:600;cursor:pointer;">📎 Attach image / PDF</button>
-      <input id="fcl-file" type="file" accept="image/*,application/pdf" multiple style="display:none;" />
-      <div style="display:flex;gap:6px;">
-        <input id="fcl-link" type="url" placeholder="🔗 Paste a link" style="flex:1;padding:8px;border:none;border-radius:8px;font-size:12px;color:#1e293b;outline:none;" />
-        <button id="fcl-link-add" style="padding:8px 12px;border:none;border-radius:8px;background:rgba(255,255,255,0.22);color:#fff;font-size:12px;font-weight:700;cursor:pointer;">Add</button>
+  <style>${WIDGET_STYLE}</style>
+  <div id="fcl-root" data-min="0">
+    <div class="fcl-full" style="display:flex;flex-direction:column;gap:8px;height:100%;">
+      <div class="fcl-hdr">
+        <div class="fcl-title">🎓 ClassLogger</div>
+        <button id="fcl-minimize" class="fcl-icon" title="Minimize">▁</button>
       </div>
+      <div id="fcl-timer" class="fcl-timer">00:00</div>
+      <select id="fcl-select" class="fcl-sel">
+        <option value="">Select a student…</option>
+        ${students.map(s => `<option value="${s.id}">${escapeHtml(s.student_name)}${s.subject ? ' — ' + escapeHtml(s.subject) : ''}</option>`).join('')}
+      </select>
+      <div class="fcl-row">
+        <button id="fcl-start" class="fcl-btn fcl-start">🟢 Start</button>
+        <button id="fcl-end" class="fcl-btn fcl-end" disabled style="opacity:0.5;">🔴 End</button>
+      </div>
+      <div id="fcl-tools" class="fcl-tools">
+        <button id="fcl-shot" class="fcl-soft">📸 Screenshot</button>
+        <button id="fcl-upload" class="fcl-soft">📎 Attach image / PDF</button>
+        <input id="fcl-file" type="file" accept="image/*,application/pdf" multiple style="display:none;" />
+        <div class="fcl-row">
+          <input id="fcl-link" type="url" class="fcl-input" placeholder="🔗 Paste a link" />
+          <button id="fcl-link-add" class="fcl-soft" style="width:auto;padding:8px 12px;">Add</button>
+        </div>
+      </div>
+      <button id="fcl-share" class="fcl-share" style="display:none;">📲 Share to WhatsApp</button>
+      <div id="fcl-status" class="fcl-status">Pick a student to begin</div>
     </div>
-
-    <button id="fcl-share" style="display:none;width:100%;padding:10px;border:none;border-radius:12px;background:#25D366;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">📲 Share to WhatsApp</button>
-    <div id="fcl-status" style="font-size:12px;text-align:center;opacity:0.95;min-height:16px;">Pick a student to begin</div>
+    <div class="fcl-min">
+      <span style="font-size:15px;">🎓</span>
+      <div id="fcl-timer-min" class="fcl-timer">00:00</div>
+      <button id="fcl-shot-min" class="fcl-icon" title="Screenshot" style="width:30px;height:30px;">📸</button>
+      <button id="fcl-expand" class="fcl-icon" title="Expand" style="width:30px;height:30px;">▢</button>
+    </div>
   </div>
 `
 
@@ -78,11 +125,32 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
   const stopTimer = useCallback(() => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null } }, [])
 
   const tick = useCallback(() => {
-    const el = $('fcl-timer')
-    if (!el || startTimeRef.current == null) return
+    if (startTimeRef.current == null) return
     const secs = Math.floor((Date.now() - startTimeRef.current) / 1000)
-    el.textContent = `${String(Math.floor(secs / 60)).padStart(2, '0')}:${String(secs % 60).padStart(2, '0')}`
+    const txt = `${String(Math.floor(secs / 60)).padStart(2, '0')}:${String(secs % 60).padStart(2, '0')}`
+    const a = $('fcl-timer'); if (a) a.textContent = txt
+    const b = $('fcl-timer-min'); if (b) b.textContent = txt
   }, [$])
+
+  // --- resize helper (PiP window or in-page host) ---
+  const resizeWidget = useCallback((w: number, h: number) => {
+    if (pipRef.current && !pipRef.current.closed) {
+      try { pipRef.current.resizeTo(w, h) } catch { /* not allowed */ }
+    } else if (inPageHostRef.current) {
+      inPageHostRef.current.style.width = `${w}px`
+      inPageHostRef.current.style.height = `${h}px`
+    }
+  }, [])
+
+  const minimize = useCallback(() => {
+    const root = $('fcl-root'); if (root) root.setAttribute('data-min', '1')
+    resizeWidget(MIN_W, MIN_H)
+  }, [$, resizeWidget])
+
+  const expand = useCallback(() => {
+    const root = $('fcl-root'); if (root) root.setAttribute('data-min', '0')
+    resizeWidget(FULL_W, FULL_H)
+  }, [$, resizeWidget])
 
   const setRunningUI = useCallback((running: boolean) => {
     const start = $('fcl-start') as HTMLButtonElement | null
@@ -97,7 +165,6 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
     if (share) share.style.display = (shareTokenRef.current ? 'block' : 'none')
   }, [$])
 
-  // --- auth helper: extension JWT from the logged-in website session ---
   const getExtToken = useCallback(async (): Promise<string | null> => {
     if (extTokenRef.current) return extTokenRef.current
     try {
@@ -108,7 +175,6 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
     return null
   }, [])
 
-  // --- screen capture: prompt once, then silent for the session ---
   const ensureStream = useCallback(async (): Promise<MediaStream | null> => {
     if (displayStreamRef.current && displayStreamRef.current.active) return displayStreamRef.current
     try {
@@ -116,9 +182,7 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
       displayStreamRef.current = stream
       stream.getVideoTracks()[0]?.addEventListener('ended', () => { displayStreamRef.current = null })
       return stream
-    } catch {
-      return null
-    }
+    } catch { return null }
   }, [])
 
   const captureFrame = useCallback(async (stream: MediaStream): Promise<string | null> => {
@@ -127,9 +191,7 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
     video.muted = true
     try {
       await video.play()
-      if (video.readyState < 2) {
-        await new Promise<void>(r => { video.onloadeddata = () => r() })
-      }
+      if (video.readyState < 2) await new Promise<void>(r => { video.onloadeddata = () => r() })
       const canvas = document.createElement('canvas')
       canvas.width = video.videoWidth
       canvas.height = video.videoHeight
@@ -137,12 +199,8 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
       if (!ctx) return null
       ctx.drawImage(video, 0, 0)
       return canvas.toDataURL('image/jpeg', 0.75)
-    } catch {
-      return null
-    } finally {
-      video.pause()
-      video.srcObject = null
-    }
+    } catch { return null }
+    finally { video.pause(); video.srcObject = null }
   }, [])
 
   const handleScreenshot = useCallback(async () => {
@@ -162,11 +220,8 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
       })
       const data = await res.json().catch(() => ({}))
       setStatus(res.ok && data.success ? '📸 Screenshot saved' : (data.error || 'Screenshot failed'))
-    } catch {
-      setStatus('Screenshot error')
-    } finally {
-      if (btn) { btn.disabled = false; btn.textContent = '📸 Screenshot' }
-    }
+    } catch { setStatus('Screenshot error') }
+    finally { if (btn) { btn.disabled = false; btn.textContent = '📸 Screenshot' } }
   }, [$, ensureStream, captureFrame, getExtToken, setStatus])
 
   const handleFiles = useCallback(async (files: FileList | null) => {
@@ -188,9 +243,7 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
         })
         const data = await res.json().catch(() => ({}))
         setStatus(res.ok && data.success ? `Attached ${file.name}` : (data.error || `Failed: ${file.name}`))
-      } catch {
-        setStatus(`Could not attach ${file.name}`)
-      }
+      } catch { setStatus(`Could not attach ${file.name}`) }
     }
   }, [getExtToken, setStatus])
 
@@ -211,9 +264,7 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
       const data = await res.json().catch(() => ({}))
       if (res.ok && data.success) { if (input) input.value = ''; setStatus('Link added') }
       else setStatus(data.error || 'Failed to add link')
-    } catch {
-      setStatus('Could not add link')
-    }
+    } catch { setStatus('Could not add link') }
   }, [$, getExtToken, setStatus])
 
   const handleShare = useCallback(() => {
@@ -225,7 +276,6 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener')
   }, [$, setStatus])
 
-  // --- start / end ---
   const handleStart = useCallback(async () => {
     const sel = $('fcl-select') as HTMLSelectElement | null
     const enrollmentId = sel?.value
@@ -277,10 +327,8 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
         if (end) end.textContent = '✅ Ended'
         const dur = data.duration || (data.class_log?.duration_minutes != null ? `${data.class_log.duration_minutes}m` : '')
         setStatus(`Class ended${dur ? ` · ${dur}` : ''}. Share the summary →`)
-        // stop the screen-share stream if any
         displayStreamRef.current?.getTracks().forEach(t => t.stop())
         displayStreamRef.current = null
-        // reveal share button (token persists)
         const share = $('fcl-share'); if (share && shareTokenRef.current) share.style.display = 'block'
       } else {
         setStatus(data.error || 'Failed to end')
@@ -289,8 +337,8 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
         classLogIdRef.current = null
         startTimeRef.current = null
         const t = $('fcl-timer'); if (t) t.textContent = '00:00'
+        const tm = $('fcl-timer-min'); if (tm) tm.textContent = '00:00'
         if (end) end.textContent = '🔴 End'
-        // keep share visible; reset start/select/tools
         const start = $('fcl-start') as HTMLButtonElement | null
         const sel = $('fcl-select') as HTMLSelectElement | null
         const tools = $('fcl-tools')
@@ -310,8 +358,11 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
     doc.getElementById('fcl-start')?.addEventListener('click', handleStart)
     doc.getElementById('fcl-end')?.addEventListener('click', handleEnd)
     doc.getElementById('fcl-shot')?.addEventListener('click', handleScreenshot)
+    doc.getElementById('fcl-shot-min')?.addEventListener('click', handleScreenshot)
     doc.getElementById('fcl-share')?.addEventListener('click', handleShare)
     doc.getElementById('fcl-link-add')?.addEventListener('click', handleAddLink)
+    doc.getElementById('fcl-minimize')?.addEventListener('click', minimize)
+    doc.getElementById('fcl-expand')?.addEventListener('click', expand)
     const uploadBtn = doc.getElementById('fcl-upload')
     const fileInput = doc.getElementById('fcl-file') as HTMLInputElement | null
     uploadBtn?.addEventListener('click', () => fileInput?.click())
@@ -321,7 +372,7 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
       stopTimer(); tick(); timerRef.current = setInterval(tick, 1000)
       setStatus('Class in progress')
     }
-  }, [handleStart, handleEnd, handleScreenshot, handleShare, handleAddLink, handleFiles, setRunningUI, stopTimer, tick, setStatus])
+  }, [handleStart, handleEnd, handleScreenshot, handleShare, handleAddLink, handleFiles, minimize, expand, setRunningUI, stopTimer, tick, setStatus])
 
   const loadStudents = useCallback(async () => {
     try {
@@ -334,16 +385,14 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
         sel.innerHTML = `<option value="">Select a student…</option>` +
           list.map(s => `<option value="${s.id}">${escapeHtml(s.student_name)}${s.subject ? ' — ' + escapeHtml(s.subject) : ''}</option>`).join('')
       }
-    } catch {
-      setStatus('Could not load students')
-    }
+    } catch { setStatus('Could not load students') }
   }, [$, setStatus])
 
   const openInPage = useCallback(() => {
     if (inPageHostRef.current) return
     const host = document.createElement('div')
     host.id = 'fcl-inpage'
-    host.style.cssText = 'position:fixed;bottom:20px;right:20px;width:260px;height:420px;z-index:2147483600;border-radius:16px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,0.35);'
+    host.style.cssText = `position:fixed;bottom:20px;right:20px;width:${FULL_W}px;height:${FULL_H}px;z-index:2147483600;border-radius:18px;overflow:hidden;box-shadow:0 16px 50px rgba(0,0,0,0.4);`
     host.innerHTML = WIDGET_HTML(studentsRef.current)
     document.body.appendChild(host)
     inPageHostRef.current = host
@@ -355,15 +404,13 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
     if (!dpip) { setSupported(false); openInPage(); return }
     if (pipRef.current && !pipRef.current.closed) { pipRef.current.focus(); return }
     try {
-      const pip = await dpip.requestWindow({ width: 300, height: 460 })
+      const pip = await dpip.requestWindow({ width: FULL_W, height: FULL_H })
       pipRef.current = pip
       pip.document.body.style.margin = '0'
       pip.document.body.innerHTML = WIDGET_HTML(studentsRef.current)
       wireWidget(pip.document)
       pip.addEventListener('pagehide', () => { stopTimer(); pipRef.current = null; docRef.current = null })
-    } catch {
-      openInPage()
-    }
+    } catch { openInPage() }
   }, [openInPage, wireWidget, stopTimer])
 
   const launch = useCallback(async () => { await loadStudents(); await openPiP() }, [loadStudents, openPiP])

@@ -234,31 +234,27 @@ const MyClassesView: React.FC<MyClassesViewProps> = ({ teacherId }) => {
         <div className="absolute bottom-1/4 left-1/3 w-96 h-96 bg-pink-400/20 rounded-full mix-blend-multiply filter blur-3xl animate-blob animation-delay-4000" />
       </div>
 
-      <div className="relative z-10 space-y-8 p-6">
-        {/* Sleek Compact Header */}
-        <div className="text-center py-4">
-          <div className="flex items-center justify-center gap-4">
-            <div className="relative">
-              <div className="h-12 w-12 bg-gradient-to-br from-emerald-500 via-blue-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg transform hover:scale-110 transition-all duration-300">
-                <BookOpen className="h-6 w-6 text-white" />
-                {stats.liveClasses > 0 && (
-                  <div className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center animate-bounce">
-                    <span className="text-white text-xs font-bold">{stats.liveClasses}</span>
-                  </div>
-                )}
-              </div>
+      <div className="relative z-10 space-y-5 p-6">
+        {/* Compact left-aligned header (matches Dashboard for uniformity) */}
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <div className="h-10 w-10 bg-gradient-to-br from-emerald-500 via-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-md">
+              <BookOpen className="h-5 w-5 text-white" />
+              {stats.liveClasses > 0 && (
+                <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center animate-bounce">
+                  <span className="text-white text-[10px] font-bold">{stats.liveClasses}</span>
+                </div>
+              )}
             </div>
-            
-            <div className="text-left">
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent animate-gradient">
-                My Classes 🚀
-              </h1>
-              <p className="text-sm text-muted-foreground flex items-center gap-2 mt-1">
-                <Sparkles className="w-4 h-4 text-yellow-500 animate-spin" />
-                Auto-detected magic with live tracking
-                <Zap className="w-4 h-4 text-blue-500" />
-              </p>
-            </div>
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+              My Classes
+            </h1>
+            <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-yellow-500" />
+              Auto-detected, live tracking
+            </p>
           </div>
         </div>
 
@@ -293,7 +289,7 @@ const MyClassesView: React.FC<MyClassesViewProps> = ({ teacherId }) => {
         )}
 
         {/* Enhanced Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-6">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
           <StatsCard
             title="Today"
             value={stats.today}

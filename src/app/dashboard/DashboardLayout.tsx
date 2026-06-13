@@ -1,7 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -36,6 +36,7 @@ export default function DashboardLayout({ children, user }: DashboardLayoutProps
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [isCollapsed, setIsCollapsed] = useState(false)
   const router = useRouter()
+  const pathname = usePathname()
 
   const handleSignOut = async () => {
     // Use the working Supabase client
@@ -43,18 +44,16 @@ export default function DashboardLayout({ children, user }: DashboardLayoutProps
     router.push('/')
   }
 
-  // Simple function to check if a path is active
+  // Reactive active-route check (usePathname updates on client navigation)
+  const dashboardHome = `/dashboard/${user.role}`
   const isActive = (href: string) => {
-    if (typeof window === 'undefined') return false
-    const currentPath = window.location.pathname
-    
-    // Exact match for dashboard home
-    if (href.endsWith(`/dashboard/${user.role}`)) {
-      return currentPath === href || currentPath === `${href}/`
+    const current = pathname || ''
+    // Dashboard home must match exactly (otherwise it matches every sub-page)
+    if (href === dashboardHome) {
+      return current === href || current === `${href}/`
     }
-    
-    // Partial match for sub-pages
-    return currentPath.includes(href)
+    // Sub-pages: exact match or a nested route under this href
+    return current === href || current.startsWith(`${href}/`)
   }
 
   // Define navigation items based on user role
@@ -73,7 +72,6 @@ export default function DashboardLayout({ children, user }: DashboardLayoutProps
           ...baseItems,
           { icon: '📚', label: 'My Classes', href: '/dashboard/teacher/classes' },
           { icon: '👥', label: 'Students', href: '/dashboard/teacher/students' },
-          { icon: '📝', label: 'Class Logs', href: '/dashboard/teacher/classes' },
           { icon: '📅', label: 'Booking Management', href: '/dashboard/teacher/booking' },
           { icon: '💰', label: 'Payments', href: '/dashboard/teacher/payments' }
         ]
