@@ -67,6 +67,7 @@ export async function middleware(request: NextRequest) {
     '/api/auth/signin',
     '/api/auth/signup',
     '/api/extension/verify',
+    '/class-summary', // public parent-facing class summary (token-gated)
   ]
 
   // Extension routes that need special handling
