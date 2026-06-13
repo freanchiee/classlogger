@@ -167,6 +167,7 @@ export interface ClassLog {
   credits_deducted?: number | null
   is_paid?: boolean | null
   payment_status?: 'paid' | 'partial' | 'unpaid' | null
+  share_token?: string | null
   created_at: string
   updated_at: string
 }

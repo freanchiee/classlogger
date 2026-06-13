@@ -263,6 +263,24 @@ const ClassCard: React.FC<ClassCardProps> = ({
                       Award Credits
                     </Button>
                   )}
+                  {/* Share summary to WhatsApp */}
+                  {classLog.status === 'completed' && classLog.share_token && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-xs text-green-700 border-green-300 hover:bg-green-50"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const url = `${window.location.origin}/class-summary/${classLog.share_token}`
+                        const label = classLog.student_name || 'your child'
+                        const text = `Hi! Here's the class summary for ${label}:\n${url}`
+                        window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener')
+                      }}
+                      title="Share class summary on WhatsApp"
+                    >
+                      📲 Share
+                    </Button>
+                  )}
                 </CardTitle>
               </div>
 
