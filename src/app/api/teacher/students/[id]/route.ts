@@ -330,17 +330,26 @@ export async function PATCH(
     if (updateData.parent_name || updateData.parent_email) {
       console.log('🔍 Looking for parent relationship...')
       
-      // Get parent ID from relationship table
-      const { data: parentRelation, error: parentRelationError  } = await supabase
+      // Resolve parent: parent_child_relationships first, then profiles.parent_id
+      const { data: parentRelation } = await supabase
         .from('parent_child_relationships')
         .select('parent_id')
         .eq('child_id', enrollment.student_id)
-        .single()
+        .maybeSingle()
 
-      if (parentRelationError) {
-        console.error('❌ Error finding parent relation:', parentRelationError)
-        // Continue without failing the entire operation
-      } else if (parentRelation) {
+      let parentId: string | null = parentRelation?.parent_id ?? null
+      if (!parentId) {
+        const { data: childProfile } = await supabase
+          .from('profiles')
+          .select('parent_id')
+          .eq('id', enrollment.student_id)
+          .maybeSingle()
+        parentId = childProfile?.parent_id ?? null
+      }
+
+      if (!parentId) {
+        console.warn('⚠️ No parent linked for student; skipping parent update')
+      } else {
         const parentUpdates: ProfileUpdate = {}
         
         if (updateData.parent_name !== undefined && updateData.parent_name.trim()) {
@@ -356,7 +365,7 @@ export async function PATCH(
           const { data: updatedParent, error: updateParentError  } = await supabase
             .from('profiles')
             .update(parentUpdates)
-            .eq('id', parentRelation.parent_id)
+            .eq('id', parentId)
             .select()
 
           if (updateParentError) {
