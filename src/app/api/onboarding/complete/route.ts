@@ -73,13 +73,7 @@ export async function POST(request: NextRequest) {
 
     console.log('Found invitation:', invitation);
 
-    // Check if invitation is expired
-    if (invitation.expires_at && new Date(invitation.expires_at) < new Date()) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Invitation has expired' 
-      }, { status: 400 });
-    }
+    // Invitation links do not expire — no expiry check.
 
     // Generate automatic credentials (you can modify this logic)
     const parentEmail = invitation.parent_email;

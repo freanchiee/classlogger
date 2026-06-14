@@ -50,27 +50,22 @@ export default function OnboardingPage({ params }: OnboardingPageProps) {
       console.log('=== LOADING INVITATION ===')
       console.log('Token:', token)
 
+      // Load by token only — invitation links do NOT expire, and a link can be
+      // re-opened even after it's been used (so teachers can verify it works).
       const { data: invitationData, error: invitationError  } = await supabase
         .from('student_invitations')
         .select('*')
         .eq('invitation_token', token)
-        .eq('status', 'pending')
-        .single()
+        .maybeSingle()
 
       if (invitationError) {
         console.error('Invitation error:', invitationError)
-        setError('Invalid or expired invitation link')
+        setError('Could not load this invitation. Please try again.')
         return
       }
 
       if (!invitationData) {
         setError('Invitation not found')
-        return
-      }
-
-      const expiresAt = new Date(invitationData.expires_at || '')
-      if (expiresAt < new Date()) {
-        setError('This invitation has expired')
         return
       }
 

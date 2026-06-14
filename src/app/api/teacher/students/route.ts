@@ -611,7 +611,8 @@ export async function POST(request: NextRequest) {
       whatsapp_group_url: whatsapp_group_url ? whatsapp_group_url.trim() : null,
       google_meet_url: google_meet_url ? google_meet_url.trim() : null,
       status: 'pending',
-      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+      // Invitation links do not expire (far-future date keeps the column valid)
+      expires_at: new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000).toISOString()
     }
 
     // 🔧 ENHANCED: Add student_email if provided
