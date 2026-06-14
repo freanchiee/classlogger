@@ -647,8 +647,14 @@ export async function POST(request: NextRequest) {
       }, { status: 500 })
     }
 
-    // Generate invitation URL
-    const invitationUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/onboarding/${invitation_token}`
+    // Generate invitation URL. Prefer the actual request origin so the link
+    // always matches the deployment (production or local); fall back to env.
+    const baseUrl =
+      request.nextUrl?.origin ||
+      process.env.NEXT_PUBLIC_BASE_URL ||
+      process.env.NEXT_PUBLIC_APP_URL ||
+      'https://classlogger.com'
+    const invitationUrl = `${baseUrl}/onboarding/${invitation_token}`
 
     return NextResponse.json({
       success: true,
