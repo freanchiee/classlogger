@@ -43,6 +43,21 @@ interface Stats {
   pendingInvitations: number
 }
 
+// Detect data issues a teacher should rectify for an enrolled student.
+function getStudentIssues(s: Student): string[] {
+  const issues: string[] = []
+  const sched = typeof s.tentative_schedule === 'object'
+    ? s.tentative_schedule?.note
+    : s.tentative_schedule
+  if (!s.google_meet_url) issues.push('Google Meet URL')
+  if (!s.whatsapp_group_url) issues.push('WhatsApp group')
+  if (!sched || !String(sched).trim()) issues.push('Schedule')
+  if (!s.subject || ['general', 'unknown', 'unknown subject'].includes(s.subject.toLowerCase())) issues.push('Subject')
+  if (!s.year_group || ['not specified', 'unknown', 'unknown grade'].includes(s.year_group.toLowerCase())) issues.push('Year group')
+  if (!s.parent_email) issues.push('Parent email')
+  return issues
+}
+
 export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>([])
   const [invitations, setInvitations] = useState<Invitation[]>([])
@@ -435,8 +450,12 @@ export default function StudentsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {students.map((student, index) => (
-                        <tr key={student.id} className={`border-b border-gray-100 hover:bg-gradient-to-r hover:from-emerald-50 hover:to-teal-50 transition-all duration-200 ${index % 2 === 0 ? 'bg-gray-50/50' : 'bg-white'}`}>
+                      {students.map((student, index) => { const issues = getStudentIssues(student); return (
+                        <tr key={student.id} className={`border-b border-gray-100 transition-all duration-200 ${
+                          issues.length > 0
+                            ? 'bg-red-50/60 hover:bg-red-50'
+                            : `hover:bg-gradient-to-r hover:from-emerald-50 hover:to-teal-50 ${index % 2 === 0 ? 'bg-gray-50/50' : 'bg-white'}`
+                        }`}>
                           <td className="py-5 px-3">
                             <div>
                               <p className="font-semibold text-gray-900 text-lg">{student.student_name}</p>
@@ -460,21 +479,36 @@ export default function StudentsPage() {
                             </span>
                           </td>
                           <td className="py-5 px-3">
-                            <span className={`inline-flex px-3 py-2 text-sm font-semibold rounded-full ${
-                              student.setup_completed 
-                                ? 'bg-gradient-to-r from-green-100 to-emerald-100 text-green-800' 
-                                : 'bg-gradient-to-r from-orange-100 to-red-100 text-orange-800'
-                            }`}>
-                              {student.setup_completed ? '✅ Complete' : '⚠️ Needs Setup'}
-                            </span>
+                            {issues.length === 0 ? (
+                              <span className="inline-flex px-3 py-2 text-sm font-semibold rounded-full bg-gradient-to-r from-green-100 to-emerald-100 text-green-800">
+                                ✅ Complete
+                              </span>
+                            ) : (
+                              <div className="space-y-1">
+                                <span className="inline-flex px-3 py-2 text-sm font-semibold rounded-full bg-gradient-to-r from-orange-100 to-red-100 text-red-800">
+                                  ⚠️ {issues.length} to fix
+                                </span>
+                                <div className="flex flex-wrap gap-1 max-w-[220px]">
+                                  {issues.map((issue) => (
+                                    <span key={issue} className="text-[11px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
+                                      {issue}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </td>
                           <td className="py-5 px-3">
                             <div className="flex items-center gap-2">
                               <button
                                 onClick={() => handleViewDetails(student)}
-                                className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-4 py-2 rounded-lg hover:from-emerald-600 hover:to-teal-700 transition-all duration-200 text-sm font-medium transform hover:scale-105"
+                                className={`px-4 py-2 rounded-lg transition-all duration-200 text-sm font-medium transform hover:scale-105 text-white ${
+                                  issues.length > 0
+                                    ? 'bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700'
+                                    : 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700'
+                                }`}
                               >
-                                View Details
+                                {issues.length > 0 ? '✏️ Fix' : '✏️ Edit'}
                               </button>
                               <button
                                 onClick={() => handleDeleteStudent(student)}
@@ -490,7 +524,7 @@ export default function StudentsPage() {
                             </div>
                           </td>
                         </tr>
-                      ))}
+                      )})}
                     </tbody>
                   </table>
             </div>
