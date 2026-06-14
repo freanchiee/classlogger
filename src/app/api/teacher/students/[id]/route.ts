@@ -58,6 +58,8 @@ const debugSupabaseClientType: SupabaseClient = {} as SupabaseClient
 console.log('Debug: SupabaseClient interface available for future use:', debugSupabaseClientType)
 
 interface EnrollmentUpdate {
+  subject?: string
+  year_group?: string
   classes_per_week?: number
   classes_per_recharge?: number
   tentative_schedule?: string | object | null
@@ -166,7 +168,15 @@ export async function PATCH(
 
     // ===== UPDATE ENROLLMENTS TABLE =====
     const enrollmentUpdates: EnrollmentUpdate = {}
-    
+
+    if (updateData.subject !== undefined && updateData.subject.trim()) {
+      enrollmentUpdates.subject = updateData.subject.trim()
+      console.log('📝 Will update subject:', enrollmentUpdates.subject)
+    }
+    if (updateData.year_group !== undefined && updateData.year_group.trim()) {
+      enrollmentUpdates.year_group = updateData.year_group.trim()
+      console.log('📝 Will update year_group:', enrollmentUpdates.year_group)
+    }
     if (updateData.classes_per_week !== undefined) {
       enrollmentUpdates.classes_per_week = updateData.classes_per_week
       console.log('📝 Will update classes_per_week:', updateData.classes_per_week)
