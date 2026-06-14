@@ -196,6 +196,27 @@ export default function OnboardingPage({ params }: OnboardingPageProps) {
     return null
   }
 
+  // Already onboarded — friendly state (link stays valid, just shows status)
+  if (invitation.status === 'completed') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-emerald-400 via-teal-500 to-green-600 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl p-8 text-center">
+          <div className="text-6xl mb-6">✅</div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-3">Already Enrolled</h1>
+          <p className="text-gray-600 mb-8 text-lg">
+            {invitation.student_name} has already completed enrollment with this link. No further action is needed.
+          </p>
+          <button
+            onClick={() => router.push('/')}
+            className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-8 py-3 rounded-xl font-semibold hover:from-emerald-600 hover:to-teal-700 transform hover:scale-105 transition-all duration-200 shadow-lg"
+          >
+            Go to ClassLogger
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-400 via-emerald-500 to-teal-600 flex items-center justify-center p-4">
       <div className="max-w-4xl w-full">

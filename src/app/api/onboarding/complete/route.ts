@@ -232,17 +232,25 @@ export async function POST(request: NextRequest) {
 
     console.log('Creating parent-child relationship...');
 
-    // Create parent-child relationship
-    const { error: relationshipError } = await supabaseAdmin
+    // Create parent-child relationship (idempotent — skip if it already exists)
+    const { data: existingRel } = await supabaseAdmin
       .from('parent_child_relationships')
-      .insert({
-        parent_id: parentAuthData.user.id,
-        child_id: studentAuthData.user.id
-      });
+      .select('id')
+      .eq('parent_id', parentAuthData.user.id)
+      .eq('child_id', studentAuthData.user.id)
+      .maybeSingle()
 
-    if (relationshipError) {
-      console.error('Relationship creation error:', relationshipError);
-      // Don't fail the whole process for this, just log it
+    if (!existingRel) {
+      const { error: relationshipError } = await supabaseAdmin
+        .from('parent_child_relationships')
+        .insert({
+          parent_id: parentAuthData.user.id,
+          child_id: studentAuthData.user.id
+        });
+      if (relationshipError) {
+        console.error('Relationship creation error:', relationshipError);
+        // Don't fail the whole process for this, just log it
+      }
     }
 
     console.log('Finding teacher class...');
@@ -288,29 +296,51 @@ export async function POST(request: NextRequest) {
 
     console.log('Creating enrollment...');
 
-    // Create enrollment
-    const { error: enrollmentError } = await supabaseAdmin
+    // Idempotent: if this student already has an enrollment with this teacher
+    // (same Meet URL / class), don't create a duplicate — re-using an invite
+    // link or re-onboarding the same student should succeed gracefully.
+    let enrollmentQuery = supabaseAdmin
       .from('enrollments')
-      .insert({
-        student_id: studentAuthData.user.id,
-        teacher_id: invitation.teacher_id,
-        class_id: classId,
-        status: 'active',
-        enrollment_date: new Date().toISOString(),
-        classes_per_week: invitation.classes_per_week,
-        classes_per_recharge: invitation.classes_per_recharge,
-        tentative_schedule: invitation.tentative_schedule,
-        whatsapp_group_url: invitation.whatsapp_group_url,
-        google_meet_url: invitation.google_meet_url,
-        setup_completed: true
-      });
+      .select('id')
+      .eq('teacher_id', invitation.teacher_id)
+      .eq('student_id', studentAuthData.user.id)
+    enrollmentQuery = invitation.google_meet_url
+      ? enrollmentQuery.eq('google_meet_url', invitation.google_meet_url)
+      : enrollmentQuery.eq('class_id', classId)
+    const { data: existingEnrollment } = await enrollmentQuery.maybeSingle()
 
-    if (enrollmentError) {
-      console.error('Enrollment creation error:', enrollmentError);
-      return NextResponse.json({ 
-        success: false, 
-        error: `Failed to create enrollment: ${enrollmentError.message}` 
-      }, { status: 500 });
+    if (existingEnrollment) {
+      console.log('Enrollment already exists, skipping creation:', existingEnrollment.id)
+    } else {
+      const { error: enrollmentError } = await supabaseAdmin
+        .from('enrollments')
+        .insert({
+          student_id: studentAuthData.user.id,
+          teacher_id: invitation.teacher_id,
+          class_id: classId,
+          status: 'active',
+          enrollment_date: new Date().toISOString(),
+          classes_per_week: invitation.classes_per_week,
+          classes_per_recharge: invitation.classes_per_recharge,
+          tentative_schedule: invitation.tentative_schedule,
+          whatsapp_group_url: invitation.whatsapp_group_url,
+          google_meet_url: invitation.google_meet_url,
+          setup_completed: true
+        });
+
+      if (enrollmentError) {
+        // Treat the duplicate-Meet guard as success (idempotent re-submit)
+        const isDuplicate = /duplicate/i.test(enrollmentError.message)
+        if (isDuplicate) {
+          console.log('Enrollment already exists (duplicate guard) — treating as success')
+        } else {
+          console.error('Enrollment creation error:', enrollmentError);
+          return NextResponse.json({
+            success: false,
+            error: `Failed to create enrollment: ${enrollmentError.message}`
+          }, { status: 500 });
+        }
+      }
     }
 
     console.log('Updating invitation status...');
