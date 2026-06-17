@@ -410,7 +410,12 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
       pip.document.body.style.margin = '0'
       pip.document.body.innerHTML = WIDGET_HTML(studentsRef.current)
       wireWidget(pip.document)
-      pip.addEventListener('pagehide', () => { stopTimer(); pipRef.current = null; docRef.current = null })
+      pip.addEventListener('pagehide', () => {
+        pipRef.current = null; docRef.current = null; stopTimer()
+        // ponytail: browser allows only ONE Document PiP — Meet's PiP evicts ours.
+        // Fall back to the in-page panel so the widget never vanishes mid-class.
+        if (classLogIdRef.current) openInPage()
+      })
     } catch { openInPage() }
   }, [openInPage, wireWidget, stopTimer])
 
