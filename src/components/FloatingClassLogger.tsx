@@ -116,6 +116,31 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
   const docRef = useRef<Document | null>(null)
   const extTokenRef = useRef<string | null>(null)
   const displayStreamRef = useRef<MediaStream | null>(null)
+  const selectedRef = useRef<string>('') // selected enrollment id (survives relaunch)
+
+  // Persist the active class so it survives PiP eviction, reloads and network drops
+  const saveActive = useCallback(() => {
+    try {
+      localStorage.setItem('fcl_active_class', JSON.stringify({
+        classLogId: classLogIdRef.current,
+        shareToken: shareTokenRef.current,
+        enrollmentId: selectedRef.current,
+        startTime: startTimeRef.current,
+      }))
+    } catch { /* ignore */ }
+  }, [])
+  const clearActive = useCallback(() => { try { localStorage.removeItem('fcl_active_class') } catch { /* ignore */ } }, [])
+  const loadActive = useCallback(() => {
+    try {
+      const a = JSON.parse(localStorage.getItem('fcl_active_class') || 'null')
+      if (a?.classLogId && a?.startTime) {
+        classLogIdRef.current = a.classLogId
+        shareTokenRef.current = a.shareToken || null
+        selectedRef.current = a.enrollmentId || ''
+        startTimeRef.current = a.startTime
+      }
+    } catch { /* ignore */ }
+  }, [])
 
   const $ = useCallback((id: string): HTMLElement | null => docRef.current?.getElementById(id) ?? null, [])
   const setStatus = useCallback((msg: string) => { const el = $('fcl-status'); if (el) el.textContent = msg }, [$])
@@ -295,7 +320,11 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
       if ((res.ok && data.success) || (res.status === 409 && data.class_log_id)) {
         classLogIdRef.current = data.class_log_id
         shareTokenRef.current = data.class_log?.share_token || shareTokenRef.current
-        startTimeRef.current = Date.now()
+        selectedRef.current = enrollmentId
+        // Anchor the timer to the server start time so it survives reload/relaunch
+        const startIso = data.class_log?.start_time
+        startTimeRef.current = startIso ? new Date(startIso).getTime() : Date.now()
+        saveActive()
         setRunningUI(true)
         stopTimer(); tick(); timerRef.current = setInterval(tick, 1000)
         setStatus(res.status === 409 ? 'Resumed in-progress class' : 'Class in progress')
@@ -307,7 +336,7 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
       if (start) { start.disabled = false; start.textContent = '🟢 Start' }
       setStatus('Network error starting class')
     }
-  }, [$, teacherId, setStatus, setRunningUI, stopTimer, tick])
+  }, [$, teacherId, setStatus, setRunningUI, stopTimer, tick, saveActive])
 
   const handleEnd = useCallback(async () => {
     const classLogId = classLogIdRef.current
@@ -334,9 +363,11 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
       } else {
         setStatus(data.error || 'Failed to end')
       }
+      clearActive()
       setTimeout(() => {
         classLogIdRef.current = null
         startTimeRef.current = null
+        selectedRef.current = ''
         const t = $('fcl-timer'); if (t) t.textContent = '00:00'
         const tm = $('fcl-timer-min'); if (tm) tm.textContent = '00:00'
         if (end) end.textContent = '🔴 End'
@@ -352,7 +383,7 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
       if (end) { end.disabled = false; end.textContent = '🔴 End' }
       setStatus('Network error ending class')
     }
-  }, [$, teacherId, setStatus, stopTimer])
+  }, [$, teacherId, setStatus, stopTimer, clearActive])
 
   const wireWidget = useCallback((doc: Document) => {
     docRef.current = doc
@@ -368,6 +399,9 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
     const fileInput = doc.getElementById('fcl-file') as HTMLInputElement | null
     uploadBtn?.addEventListener('click', () => fileInput?.click())
     fileInput?.addEventListener('change', e => handleFiles((e.target as HTMLInputElement).files))
+    // Restore the selected student so the name doesn't vanish on relaunch
+    const selEl = doc.getElementById('fcl-select') as HTMLSelectElement | null
+    if (selEl && selectedRef.current) selEl.value = selectedRef.current
     if (classLogIdRef.current && startTimeRef.current) {
       setRunningUI(true)
       stopTimer(); tick(); timerRef.current = setInterval(tick, 1000)
@@ -419,7 +453,7 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
     } catch { openInPage() }
   }, [openInPage, wireWidget, stopTimer])
 
-  const launch = useCallback(async () => { await loadStudents(); await openPiP() }, [loadStudents, openPiP])
+  const launch = useCallback(async () => { await loadStudents(); loadActive(); await openPiP() }, [loadStudents, loadActive, openPiP])
 
   useEffect(() => { setSupported('documentPictureInPicture' in window) }, [])
 

@@ -241,6 +241,31 @@ const ClassCard: React.FC<ClassCardProps> = ({
                       Enhanced
                     </Badge>
                   )}
+                  {/* End Class — backup for when the floating widget glitches */}
+                  {(classLog.isLive || classLog.status === 'in_progress') && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="ml-auto text-xs text-red-600 border-red-300 hover:bg-red-50"
+                      onClick={async (e) => {
+                        e.stopPropagation()
+                        if (!confirm('End this class now?')) return
+                        await fetch('/api/classes', {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          credentials: 'include',
+                          body: JSON.stringify({
+                            class_log_id: classLog.id,
+                            teacher_id: classLog.teacher_id,
+                            end_time: new Date().toISOString(),
+                          }),
+                        })
+                        // Realtime subscription refreshes the dashboard
+                      }}
+                    >
+                      🔴 End Class
+                    </Button>
+                  )}
                   {/* Award Credits Button */}
                   {classLog.student_email && classLog.status === 'completed' && (
                     <Button
