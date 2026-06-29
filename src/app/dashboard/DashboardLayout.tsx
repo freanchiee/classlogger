@@ -72,7 +72,8 @@ export default function DashboardLayout({ children, user }: DashboardLayoutProps
           ...baseItems,
           { icon: '📚', label: 'My Classes', href: '/dashboard/teacher/classes' },
           { icon: '👥', label: 'Students', href: '/dashboard/teacher/students' },
-          { icon: '📅', label: 'Booking Management', href: '/dashboard/teacher/booking' },
+          { icon: '📅', label: 'Class Log', href: '/dashboard/teacher/logs' },
+          { icon: '🗓️', label: 'Booking Management', href: '/dashboard/teacher/booking' },
           { icon: '💰', label: 'Payments', href: '/dashboard/teacher/payments' }
         ]
       
