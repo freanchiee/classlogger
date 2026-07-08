@@ -3,7 +3,7 @@
 
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { 
   Calendar, 
   Users, 
@@ -111,6 +111,7 @@ const MyClassesView: React.FC<MyClassesViewProps> = ({ teacherId }) => {
 
   // Manual log form state
   const [manualLogForm, setManualLogForm] = useState({
+    enrollment_id: '',
     student_name: '',
     subject: '',
     start_time: '',
@@ -118,6 +119,17 @@ const MyClassesView: React.FC<MyClassesViewProps> = ({ teacherId }) => {
     content: '',
     homework_assigned: ''
   })
+  const [manualFiles, setManualFiles] = useState<File[]>([])
+  const [manualSubmitting, setManualSubmitting] = useState(false)
+  const [enrolledStudents, setEnrolledStudents] = useState<{ id: string; student_name: string; subject: string; status?: string }[]>([])
+
+  // Enrolled students for the manual-log dropdown
+  useEffect(() => {
+    fetch('/api/teacher/students', { credentials: 'include' })
+      .then(r => r.json())
+      .then(d => setEnrolledStudents((d.students || []).filter((s: { status?: string }) => !s.status || s.status === 'active')))
+      .catch(() => setEnrolledStudents([]))
+  }, [])
 
   // Use the custom hook
   const {
@@ -145,26 +157,72 @@ const MyClassesView: React.FC<MyClassesViewProps> = ({ teacherId }) => {
     return log.status === filterStatus
   })
 
-  // Handle manual log submission
+  // Create a real class log for the selected student (same flow as the widget:
+  // POST /api/classes to open, PUT to complete), then attach any uploaded files.
   const handleManualLogSubmit = async () => {
+    if (!manualLogForm.enrollment_id) return
+    setManualSubmitting(true)
     try {
+      const iso = (t: string) => (t ? new Date(`${selectedDate}T${t}:00`).toISOString() : new Date().toISOString())
+      const startISO = iso(manualLogForm.start_time)
+      const endISO = iso(manualLogForm.end_time)
 
-      console.log('Manual log submission:', manualLogForm)
-      
-      setManualLogForm({
-        student_name: '',
-        subject: '',
-        start_time: '',
-        end_time: '',
-        content: '',
-        homework_assigned: ''
+      const startRes = await fetch('/api/classes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          teacher_id: teacherId,
+          enrollment_id: manualLogForm.enrollment_id,
+          manual_override: true,
+          start_time: startISO,
+        }),
       })
+      const startData = await startRes.json()
+      const classLogId = startData.class_log_id
+      if (!classLogId) throw new Error(startData.error || 'Failed to create class')
+
+      await fetch('/api/classes', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          class_log_id: classLogId,
+          teacher_id: teacherId,
+          end_time: endISO,
+          content: manualLogForm.content || undefined,
+          homework_assigned: manualLogForm.homework_assigned || undefined,
+        }),
+      })
+
+      // Attach uploaded files (images -> screenshots, others -> resources)
+      if (manualFiles.length) {
+        const tokenRes = await fetch('/api/extension/issue-temp-token', { method: 'POST', credentials: 'include' })
+        const token = (await tokenRes.json())?.token
+        const auth: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
+        for (const file of manualFiles) {
+          const dataUrl: string = await new Promise((resolve, reject) => {
+            const rd = new FileReader(); rd.onload = () => resolve(rd.result as string); rd.onerror = reject; rd.readAsDataURL(file)
+          })
+          const isImg = file.type.startsWith('image/')
+          await fetch(isImg ? '/api/extension/screenshot' : '/api/extension/save-resource', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...auth },
+            body: JSON.stringify(isImg
+              ? { class_log_id: classLogId, screenshot_data: dataUrl, screenshot_type: 'manual' }
+              : { class_log_id: classLogId, type: 'file', file_data: dataUrl, name: file.name }),
+          })
+        }
+      }
+
+      setManualLogForm({ enrollment_id: '', student_name: '', subject: '', start_time: '', end_time: '', content: '', homework_assigned: '' })
+      setManualFiles([])
       setIsManualLogDialogOpen(false)
-      
       await refreshData()
     } catch (err) {
-    
       console.error('Error creating manual log:', err)
+    } finally {
+      setManualSubmitting(false)
     }
   }
 
@@ -478,24 +536,26 @@ const MyClassesView: React.FC<MyClassesViewProps> = ({ teacherId }) => {
                   </DialogHeader>
                   <div className="space-y-4">
                     <div>
-                      <Label htmlFor="student-name">Student Name</Label>
-                      <Input 
-                        id="student-name" 
-                        placeholder="Enter student name"
-                        value={manualLogForm.student_name}
-                        onChange={(e) => updateManualLogForm('student_name', e.target.value)}
-                        className="border-2 focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="subject">Subject</Label>
-                      <Input 
-                        id="subject" 
-                        placeholder="e.g., Mathematics"
-                        value={manualLogForm.subject}
-                        onChange={(e) => updateManualLogForm('subject', e.target.value)}
-                        className="border-2 focus:border-blue-500"
-                      />
+                      <Label htmlFor="student-select">Student</Label>
+                      <select
+                        id="student-select"
+                        value={manualLogForm.enrollment_id}
+                        onChange={(e) => {
+                          const s = enrolledStudents.find(x => x.id === e.target.value)
+                          setManualLogForm(prev => ({
+                            ...prev,
+                            enrollment_id: e.target.value,
+                            student_name: s?.student_name || '',
+                            subject: s?.subject || '',
+                          }))
+                        }}
+                        className="w-full border-2 rounded-md px-3 py-2 focus:border-blue-500 outline-none bg-white"
+                      >
+                        <option value="">Select an enrolled student…</option>
+                        {enrolledStudents.map(s => (
+                          <option key={s.id} value={s.id}>{s.student_name}{s.subject ? ` — ${s.subject}` : ''}</option>
+                        ))}
+                      </select>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
@@ -532,22 +592,36 @@ const MyClassesView: React.FC<MyClassesViewProps> = ({ teacherId }) => {
                     </div>
                     <div>
                       <Label htmlFor="homework">Homework Assigned</Label>
-                      <Input 
-                        id="homework" 
+                      <Input
+                        id="homework"
                         placeholder="Optional homework assignment"
                         value={manualLogForm.homework_assigned}
                         onChange={(e) => updateManualLogForm('homework_assigned', e.target.value)}
                         className="border-2 focus:border-blue-500"
                       />
                     </div>
+                    <div>
+                      <Label htmlFor="manual-files">Screenshots / files (optional)</Label>
+                      <Input
+                        id="manual-files"
+                        type="file"
+                        accept="image/*,application/pdf"
+                        multiple
+                        onChange={(e) => setManualFiles(Array.from(e.target.files || []))}
+                        className="border-2 focus:border-blue-500"
+                      />
+                      {manualFiles.length > 0 && (
+                        <p className="text-xs text-gray-500 mt-1">{manualFiles.length} file(s) selected</p>
+                      )}
+                    </div>
                     <div className="flex space-x-2 pt-4">
-                      <Button 
-                        className="flex-1 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600" 
+                      <Button
+                        className="flex-1 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600"
                         onClick={handleManualLogSubmit}
-                        disabled={!manualLogForm.student_name || !manualLogForm.subject}
+                        disabled={!manualLogForm.enrollment_id || manualSubmitting}
                       >
                         <Plus className="h-4 w-4 mr-2" />
-                        Add Class Log
+                        {manualSubmitting ? 'Adding…' : 'Add Class Log'}
                       </Button>
                       <Button 
                         variant="outline" 
