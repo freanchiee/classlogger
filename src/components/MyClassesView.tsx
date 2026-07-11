@@ -114,6 +114,7 @@ const MyClassesView: React.FC<MyClassesViewProps> = ({ teacherId }) => {
     enrollment_id: '',
     student_name: '',
     subject: '',
+    date: selectedDate,
     start_time: '',
     end_time: '',
     content: '',
@@ -121,6 +122,7 @@ const MyClassesView: React.FC<MyClassesViewProps> = ({ teacherId }) => {
   })
   const [manualFiles, setManualFiles] = useState<File[]>([])
   const [manualSubmitting, setManualSubmitting] = useState(false)
+  const [editingLogId, setEditingLogId] = useState<string | null>(null)
   const [enrolledStudents, setEnrolledStudents] = useState<{ id: string; student_name: string; subject: string; status?: string }[]>([])
 
   // Enrolled students for the manual-log dropdown
@@ -160,12 +162,37 @@ const MyClassesView: React.FC<MyClassesViewProps> = ({ teacherId }) => {
   // Create a real class log for the selected student (same flow as the widget:
   // POST /api/classes to open, PUT to complete), then attach any uploaded files.
   const handleManualLogSubmit = async () => {
-    if (!manualLogForm.enrollment_id) return
+    if (!editingLogId && !manualLogForm.enrollment_id) return
     setManualSubmitting(true)
     try {
-      const iso = (t: string) => (t ? new Date(`${selectedDate}T${t}:00`).toISOString() : new Date().toISOString())
+      const day = manualLogForm.date || selectedDate
+      const iso = (t: string) => (t ? new Date(`${day}T${t}:00`).toISOString() : new Date().toISOString())
       const startISO = iso(manualLogForm.start_time)
       const endISO = iso(manualLogForm.end_time)
+
+      // Edit mode: patch the existing log's date/time/content
+      if (editingLogId) {
+        await fetch('/api/classes', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            class_log_id: editingLogId,
+            teacher_id: teacherId,
+            date: day,
+            start_time: startISO,
+            end_time: endISO,
+            content: manualLogForm.content || undefined,
+            homework_assigned: manualLogForm.homework_assigned || undefined,
+          }),
+        })
+        setEditingLogId(null)
+        setManualLogForm({ enrollment_id: '', student_name: '', subject: '', date: selectedDate, start_time: '', end_time: '', content: '', homework_assigned: '' })
+        setManualFiles([])
+        setIsManualLogDialogOpen(false)
+        await refreshData()
+        return
+      }
 
       const startRes = await fetch('/api/classes', {
         method: 'POST',
@@ -215,7 +242,7 @@ const MyClassesView: React.FC<MyClassesViewProps> = ({ teacherId }) => {
         }
       }
 
-      setManualLogForm({ enrollment_id: '', student_name: '', subject: '', start_time: '', end_time: '', content: '', homework_assigned: '' })
+      setManualLogForm({ enrollment_id: '', student_name: '', subject: '', date: selectedDate, start_time: '', end_time: '', content: '', homework_assigned: '' })
       setManualFiles([])
       setIsManualLogDialogOpen(false)
       await refreshData()
@@ -225,6 +252,28 @@ const MyClassesView: React.FC<MyClassesViewProps> = ({ teacherId }) => {
       setManualSubmitting(false)
     }
   }
+
+  // Open the modal in edit mode when a card requests it
+  useEffect(() => {
+    const onEdit = (e: Event) => {
+      const c = (e as CustomEvent).detail
+      const hhmm = (iso?: string | null) => (iso ? new Date(iso).toISOString().slice(11, 16) : '')
+      setEditingLogId(c.id)
+      setManualLogForm({
+        enrollment_id: c.enrollment_id || '',
+        student_name: c.student_name || '',
+        subject: c.subject || '',
+        date: (c.date || c.start_time || '').slice(0, 10),
+        start_time: hhmm(c.start_time),
+        end_time: hhmm(c.end_time),
+        content: c.content || '',
+        homework_assigned: c.homework_assigned || '',
+      })
+      setIsManualLogDialogOpen(true)
+    }
+    window.addEventListener('edit-class-log', onEdit)
+    return () => window.removeEventListener('edit-class-log', onEdit)
+  }, [])
 
   const updateManualLogForm = (field: keyof typeof manualLogForm, value: string) => {
     setManualLogForm(prev => ({ ...prev, [field]: value }))
@@ -528,34 +577,48 @@ const MyClassesView: React.FC<MyClassesViewProps> = ({ teacherId }) => {
                   <DialogHeader>
                     <DialogTitle className="text-xl flex items-center gap-2">
                       <Plus className="h-5 w-5 text-blue-500" />
-                      Add Manual Class Log
+                      {editingLogId ? 'Edit Class Log' : 'Add Manual Class Log'}
                     </DialogTitle>
                     <DialogDescription>
-                      Record a class session that wasn&apos;t auto-detected
+                      {editingLogId ? 'Update the date, time or details of this class' : "Record a class session that wasn't auto-detected"}
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4">
                     <div>
                       <Label htmlFor="student-select">Student</Label>
-                      <select
-                        id="student-select"
-                        value={manualLogForm.enrollment_id}
-                        onChange={(e) => {
-                          const s = enrolledStudents.find(x => x.id === e.target.value)
-                          setManualLogForm(prev => ({
-                            ...prev,
-                            enrollment_id: e.target.value,
-                            student_name: s?.student_name || '',
-                            subject: s?.subject || '',
-                          }))
-                        }}
-                        className="w-full border-2 rounded-md px-3 py-2 focus:border-blue-500 outline-none bg-white"
-                      >
-                        <option value="">Select an enrolled student…</option>
-                        {enrolledStudents.map(s => (
-                          <option key={s.id} value={s.id}>{s.student_name}{s.subject ? ` — ${s.subject}` : ''}</option>
-                        ))}
-                      </select>
+                      {editingLogId ? (
+                        <Input value={manualLogForm.student_name} disabled className="border-2 bg-gray-50" />
+                      ) : (
+                        <select
+                          id="student-select"
+                          value={manualLogForm.enrollment_id}
+                          onChange={(e) => {
+                            const s = enrolledStudents.find(x => x.id === e.target.value)
+                            setManualLogForm(prev => ({
+                              ...prev,
+                              enrollment_id: e.target.value,
+                              student_name: s?.student_name || '',
+                              subject: s?.subject || '',
+                            }))
+                          }}
+                          className="w-full border-2 rounded-md px-3 py-2 focus:border-blue-500 outline-none bg-white"
+                        >
+                          <option value="">Select an enrolled student…</option>
+                          {enrolledStudents.map(s => (
+                            <option key={s.id} value={s.id}>{s.student_name}{s.subject ? ` — ${s.subject}` : ''}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                    <div>
+                      <Label htmlFor="log-date">Date</Label>
+                      <Input
+                        id="log-date"
+                        type="date"
+                        value={manualLogForm.date}
+                        onChange={(e) => updateManualLogForm('date', e.target.value)}
+                        className="border-2 focus:border-blue-500"
+                      />
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
@@ -618,14 +681,14 @@ const MyClassesView: React.FC<MyClassesViewProps> = ({ teacherId }) => {
                       <Button
                         className="flex-1 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600"
                         onClick={handleManualLogSubmit}
-                        disabled={!manualLogForm.enrollment_id || manualSubmitting}
+                        disabled={(!editingLogId && !manualLogForm.enrollment_id) || manualSubmitting}
                       >
                         <Plus className="h-4 w-4 mr-2" />
-                        {manualSubmitting ? 'Adding…' : 'Add Class Log'}
+                        {manualSubmitting ? 'Saving…' : editingLogId ? 'Save Changes' : 'Add Class Log'}
                       </Button>
-                      <Button 
-                        variant="outline" 
-                        onClick={() => setIsManualLogDialogOpen(false)}
+                      <Button
+                        variant="outline"
+                        onClick={() => { setIsManualLogDialogOpen(false); setEditingLogId(null) }}
                       >
                         Cancel
                       </Button>

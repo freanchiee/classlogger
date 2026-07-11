@@ -266,6 +266,27 @@ const ClassCard: React.FC<ClassCardProps> = ({
                       🔴 End Class
                     </Button>
                   )}
+                  {/* Edit log (date / time / details) */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs text-blue-600 border-blue-300 hover:bg-blue-50"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      window.dispatchEvent(new CustomEvent('edit-class-log', { detail: {
+                        id: classLog.id,
+                        enrollment_id: classLog.enrollment_id,
+                        student_name: classLog.student_name,
+                        date: classLog.date,
+                        start_time: classLog.start_time,
+                        end_time: classLog.end_time,
+                        content: classLog.content,
+                        homework_assigned: classLog.homework_assigned,
+                      }}))
+                    }}
+                  >
+                    ✏️ Edit log
+                  </Button>
                   {/* Award Credits Button */}
                   {classLog.student_email && classLog.status === 'completed' && (
                     <Button

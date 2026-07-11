@@ -435,6 +435,44 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// PATCH /api/classes - edit an existing class log (date/time/content).
+// ponytail: editing duration after completion does NOT re-run credit deduction
+// (the trigger only fires on status -> completed). Adjust credits manually if needed.
+export async function PATCH(request: NextRequest) {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+  try {
+    const body = await request.json()
+    const { class_log_id, teacher_id, date, start_time, end_time, content, homework_assigned } = body
+    if (!class_log_id) {
+      return NextResponse.json({ success: false, error: 'Missing class_log_id' }, { status: 400 })
+    }
+
+    const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
+    if (date !== undefined) updates.date = date
+    if (start_time !== undefined) updates.start_time = start_time
+    if (end_time !== undefined) updates.end_time = end_time
+    if (content !== undefined) updates.content = content
+    if (homework_assigned !== undefined) updates.homework_assigned = homework_assigned
+    if (start_time && end_time) {
+      updates.duration_minutes = Math.max(0, Math.round((new Date(end_time).getTime() - new Date(start_time).getTime()) / 60000))
+    }
+
+    let q = supabase.from('class_logs').update(updates).eq('id', class_log_id)
+    if (teacher_id) q = q.eq('teacher_id', teacher_id)
+    const { data, error } = await q.select().single()
+
+    if (error) {
+      return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    }
+    return NextResponse.json({ success: true, class_log: data })
+  } catch (error) {
+    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 })
+  }
+}
+
 // Helper Functions
 
 async function validateClassStart(enrollment: Enrollment, meetUrl: string): Promise<{valid: boolean, reason?: string}> {

@@ -168,6 +168,7 @@ export interface ClassLog {
   is_paid?: boolean | null
   payment_status?: 'paid' | 'partial' | 'unpaid' | null
   share_token?: string | null
+  enrollment_id?: string | null
   created_at: string
   updated_at: string
 }
