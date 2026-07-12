@@ -38,6 +38,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 // Custom components
 import ClassCard from './ClassCard'
 import FloatingClassLogger from './FloatingClassLogger'
+import InterestForm from './InterestForm'
 
 // Hooks and utilities
 import { useClassLogs } from '@/hooks/useClassLogs'
@@ -123,6 +124,7 @@ const MyClassesView: React.FC<MyClassesViewProps> = ({ teacherId }) => {
   const [manualFiles, setManualFiles] = useState<File[]>([])
   const [manualSubmitting, setManualSubmitting] = useState(false)
   const [editingLogId, setEditingLogId] = useState<string | null>(null)
+  const [showInterest, setShowInterest] = useState(false)
   const [enrolledStudents, setEnrolledStudents] = useState<{ id: string; student_name: string; subject: string; status?: string }[]>([])
 
   // Enrolled students for the manual-log dropdown
@@ -151,6 +153,16 @@ const MyClassesView: React.FC<MyClassesViewProps> = ({ teacherId }) => {
     selectedDate,
     autoRefresh: true 
   })
+
+  // Show the interest/feedback form once, after the teacher has logged classes
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (localStorage.getItem('cl_interest_seen')) return
+    if (classLogs.length > 0 || stats.thisMonth > 0) {
+      localStorage.setItem('cl_interest_seen', '1')
+      setShowInterest(true)
+    }
+  }, [classLogs.length, stats.thisMonth])
 
   // Filter class logs
   const filteredClassLogs = classLogs.filter(log => {
@@ -345,6 +357,17 @@ const MyClassesView: React.FC<MyClassesViewProps> = ({ teacherId }) => {
       </div>
 
       <div className="relative z-10 space-y-5 p-6">
+        {/* Post-use interest / feedback prompt (shown once) */}
+        <Dialog open={showInterest} onOpenChange={setShowInterest}>
+          <DialogContent className="max-w-md border-0 shadow-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-xl">Enjoying ClassLogger? 🎓</DialogTitle>
+              <DialogDescription>Tell us about your tutoring — we&apos;d love to help you get more out of it.</DialogDescription>
+            </DialogHeader>
+            <InterestForm source="post-use" onDone={() => setShowInterest(false)} />
+          </DialogContent>
+        </Dialog>
+
         {/* Compact left-aligned header (matches Dashboard for uniformity) */}
         <div className="flex items-center gap-3">
           <div className="relative">

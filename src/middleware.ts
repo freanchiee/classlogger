@@ -69,6 +69,10 @@ export async function middleware(request: NextRequest) {
     '/api/extension/verify',
     '/class-summary', // public parent-facing class summary (token-gated)
     '/student-log',   // public student-wise monthly log (enrollment-id-gated)
+    '/interest',      // public interest / get-started form
+    '/api/interest',
+    '/sitemap.xml',
+    '/robots.txt',
   ]
 
   // Extension routes that need special handling

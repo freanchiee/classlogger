@@ -6,9 +6,73 @@ import ExtensionBridge from './extension-bridge';
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 
+const SITE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://classlogger.com";
+
 export const metadata: Metadata = {
-  title: "ClassLogger",
-  description: "Transparent class logs for parents & teachers",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "ClassLogger — Automatic Class Tracking & Logs for Online Tutors",
+    template: "%s | ClassLogger",
+  },
+  description:
+    "ClassLogger auto-tracks your Google Meet classes, manages parent credits, and shares transparent class logs with parents. Free class tracking for online tutors and tuition teachers.",
+  keywords: [
+    "class tracking software", "online tutoring", "tuition class log",
+    "Google Meet class tracker", "tutor attendance", "class management for teachers",
+    "parent class reports", "online tuition credits", "class logger",
+  ],
+  authors: [{ name: "ClassLogger" }],
+  creator: "ClassLogger",
+  publisher: "ClassLogger",
+  robots: {
+    index: true, follow: true,
+    googleBot: { index: true, follow: true, "max-image-preview": "large" },
+  },
+  alternates: { canonical: SITE_URL },
+  openGraph: {
+    type: "website", locale: "en_IN", url: SITE_URL, siteName: "ClassLogger",
+    title: "ClassLogger — Automatic Class Tracking for Online Tutors",
+    description:
+      "Auto-track Google Meet classes, manage credits, and share transparent logs with parents.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "ClassLogger — Automatic Class Tracking for Online Tutors",
+    description: "Auto-track classes, manage credits, share transparent logs with parents.",
+  },
+};
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      name: "ClassLogger",
+      applicationCategory: "BusinessApplication",
+      operatingSystem: "Web",
+      url: SITE_URL,
+      description:
+        "Automatic class tracking for online tutors: logs Google Meet sessions, manages parent credits, and shares transparent class logs with parents.",
+      offers: { "@type": "Offer", price: "0", priceCurrency: "INR" },
+    },
+    {
+      "@type": "Organization",
+      name: "ClassLogger",
+      url: SITE_URL,
+      description: "Transparent class logs and class tracking for parents & teachers.",
+    },
+    {
+      "@type": "FAQPage",
+      mainEntity: [
+        { "@type": "Question", name: "What is ClassLogger?", acceptedAnswer: { "@type": "Answer", text: "ClassLogger is a tool for online tutors that automatically tracks Google Meet classes, manages parent credit balances, and shares transparent class logs with parents." } },
+        { "@type": "Question", name: "How does ClassLogger track classes?", acceptedAnswer: { "@type": "Answer", text: "Classes can be tracked automatically via a browser extension or logged from the website with a floating widget or manual entry. Each class records duration, screenshots, and notes." } },
+        { "@type": "Question", name: "Do I need to install anything?", acceptedAnswer: { "@type": "Answer", text: "No. ClassLogger works entirely from the website with a floating logger. A Chrome extension is optional for automatic Google Meet detection and screenshots." } },
+        { "@type": "Question", name: "How do parents see class logs?", acceptedAnswer: { "@type": "Answer", text: "Teachers share a secure link. Parents open a monthly class log or a per-class summary with screenshots, topics, and duration — no login required." } },
+        { "@type": "Question", name: "How do credits work?", acceptedAnswer: { "@type": "Answer", text: "Parents buy credit hours shared across their children with a teacher. Credits are deducted automatically when a class ends." } },
+        { "@type": "Question", name: "Is ClassLogger free?", acceptedAnswer: { "@type": "Answer", text: "Yes, teachers can start logging classes for free." } },
+      ],
+    },
+  ],
 };
 
 export default function RootLayout({
@@ -19,6 +83,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
         {/* Font loading via CDN - fixes Turbopack issue */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
