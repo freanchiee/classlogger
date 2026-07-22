@@ -118,7 +118,8 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
   const displayStreamRef = useRef<MediaStream | null>(null)
   const selectedRef = useRef<string>('') // selected enrollment id (survives relaunch)
 
-  // Persist the active class so it survives PiP eviction, reloads and network drops
+  // Persist the active class (and the pending dropdown pick even before Start
+  // is clicked) so it survives PiP eviction, reloads and network drops.
   const saveActive = useCallback(() => {
     try {
       localStorage.setItem('fcl_active_class', JSON.stringify({
@@ -133,11 +134,11 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
   const loadActive = useCallback(() => {
     try {
       const a = JSON.parse(localStorage.getItem('fcl_active_class') || 'null')
-      if (a?.classLogId && a?.startTime) {
-        classLogIdRef.current = a.classLogId
+      if (a) {
+        classLogIdRef.current = a.classLogId || null
         shareTokenRef.current = a.shareToken || null
         selectedRef.current = a.enrollmentId || ''
-        startTimeRef.current = a.startTime
+        startTimeRef.current = a.startTime || null
       }
     } catch { /* ignore */ }
   }, [])
@@ -399,15 +400,23 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
     const fileInput = doc.getElementById('fcl-file') as HTMLInputElement | null
     uploadBtn?.addEventListener('click', () => fileInput?.click())
     fileInput?.addEventListener('change', e => handleFiles((e.target as HTMLInputElement).files))
-    // Restore the selected student so the name doesn't vanish on relaunch
+    // Restore the selected student so the name doesn't vanish on relaunch,
+    // and keep tracking it the moment it changes (even before Start is clicked)
+    // so an eviction/relaunch never loses the pending pick.
     const selEl = doc.getElementById('fcl-select') as HTMLSelectElement | null
-    if (selEl && selectedRef.current) selEl.value = selectedRef.current
+    if (selEl) {
+      if (selectedRef.current) selEl.value = selectedRef.current
+      selEl.addEventListener('change', () => {
+        selectedRef.current = selEl.value
+        saveActive()
+      })
+    }
     if (classLogIdRef.current && startTimeRef.current) {
       setRunningUI(true)
       stopTimer(); tick(); timerRef.current = setInterval(tick, 1000)
       setStatus('Class in progress')
     }
-  }, [handleStart, handleEnd, handleScreenshot, handleShare, handleAddLink, handleFiles, minimize, expand, setRunningUI, stopTimer, tick, setStatus])
+  }, [handleStart, handleEnd, handleScreenshot, handleShare, handleAddLink, handleFiles, minimize, expand, setRunningUI, stopTimer, tick, setStatus, saveActive])
 
   const loadStudents = useCallback(async () => {
     try {
@@ -447,8 +456,9 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
       pip.addEventListener('pagehide', () => {
         pipRef.current = null; docRef.current = null; stopTimer()
         // ponytail: browser allows only ONE Document PiP — Meet's PiP evicts ours.
-        // Fall back to the in-page panel so the widget never vanishes mid-class.
-        if (classLogIdRef.current) openInPage()
+        // Always fall back to the in-page panel (even if no class has started
+        // yet) so the widget — and any pending student pick — never vanishes.
+        openInPage()
       })
     } catch { openInPage() }
   }, [openInPage, wireWidget, stopTimer])

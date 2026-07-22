@@ -4,6 +4,7 @@ import Header from '@/components/Header';
 import DevBanner from '@/components/DevBanner';
 import ExtensionBridge from './extension-bridge';
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 const SITE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://classlogger.com";
@@ -118,6 +119,7 @@ export default function RootLayout({
         <Header />
         <ExtensionBridge />
         <SpeedInsights />
+        <Analytics />
         <main className="min-h-screen">
           {children}
         </main>
