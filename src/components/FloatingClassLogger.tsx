@@ -426,8 +426,12 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
       studentsRef.current = list
       const sel = $('fcl-select') as HTMLSelectElement | null
       if (sel) {
+        // Preserve whatever is currently picked — rewriting innerHTML wipes the
+        // visible selection even though nothing about the pick actually changed.
+        const prevValue = sel.value || selectedRef.current
         sel.innerHTML = `<option value="">Select a student…</option>` +
           list.map(s => `<option value="${s.id}">${escapeHtml(s.student_name)}${s.subject ? ' — ' + escapeHtml(s.subject) : ''}</option>`).join('')
+        if (prevValue) sel.value = prevValue
       }
     } catch { setStatus('Could not load students') }
   }, [$, setStatus])
@@ -463,7 +467,16 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
     } catch { openInPage() }
   }, [openInPage, wireWidget, stopTimer])
 
-  const launch = useCallback(async () => { await loadStudents(); loadActive(); await openPiP() }, [loadStudents, loadActive, openPiP])
+  const launch = useCallback(async () => {
+    // If a widget is already open (floating or the in-page fallback), just
+    // bring it forward — don't reload/rebuild anything (that's what was
+    // wiping the selected student's name on re-click).
+    if (pipRef.current && !pipRef.current.closed) { pipRef.current.focus(); return }
+    if (inPageHostRef.current) return
+    await loadStudents()
+    loadActive()
+    await openPiP()
+  }, [loadStudents, loadActive, openPiP])
 
   useEffect(() => { setSupported('documentPictureInPicture' in window) }, [])
 
