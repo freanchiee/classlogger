@@ -71,6 +71,9 @@ export async function middleware(request: NextRequest) {
     '/student-log',   // public student-wise monthly log (enrollment-id-gated)
     '/interest',      // public interest / get-started form
     '/api/interest',
+    '/become-a-tutor', '/api/tutor-applications',
+    '/find-a-tutor', '/api/tuition-requirements',
+    '/blog',
     '/sitemap.xml',
     '/robots.txt',
   ]

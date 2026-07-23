@@ -21,6 +21,8 @@ export const metadata: Metadata = {
     "class tracking software", "online tutoring", "tuition class log",
     "Google Meet class tracker", "tutor attendance", "class management for teachers",
     "parent class reports", "online tuition credits", "class logger",
+    "IBDP tutor", "MYP tutor", "IB tutor online", "find IBDP tutor", "find MYP tutor",
+    "become an IB tutor", "IBDP tutoring", "MYP tutoring",
   ],
   authors: [{ name: "ClassLogger" }],
   creator: "ClassLogger",
@@ -71,6 +73,8 @@ const jsonLd = {
         { "@type": "Question", name: "How do parents see class logs?", acceptedAnswer: { "@type": "Answer", text: "Teachers share a secure link. Parents open a monthly class log or a per-class summary with screenshots, topics, and duration — no login required." } },
         { "@type": "Question", name: "How do credits work?", acceptedAnswer: { "@type": "Answer", text: "Parents buy credit hours shared across their children with a teacher. Credits are deducted automatically when a class ends." } },
         { "@type": "Question", name: "Is ClassLogger free?", acceptedAnswer: { "@type": "Answer", text: "Yes, teachers can start logging classes for free." } },
+        { "@type": "Question", name: "Does ClassLogger help find an IBDP or MYP tutor?", acceptedAnswer: { "@type": "Answer", text: "Yes. Parents can submit their tutoring requirement — subject, grade level, and schedule — on the Find a Tutor page, and get matched with a personally vetted IBDP or MYP tutor." } },
+        { "@type": "Question", name: "How do I become an IBDP or MYP tutor on ClassLogger?", acceptedAnswer: { "@type": "Answer", text: "Apply on the Become a Tutor page. Every application is personally reviewed — it is not an open, unvetted marketplace." } },
       ],
     },
   ],
@@ -126,7 +130,13 @@ export default function RootLayout({
 
         {/* Footer */}
         <footer className="bg-gray-50 border-t border-gray-200">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-4">
+            <nav className="flex flex-wrap gap-x-6 gap-y-2 justify-center sm:justify-start text-sm text-gray-600">
+              <a href="/find-a-tutor" className="hover:text-emerald-700">Find a Tutor</a>
+              <a href="/become-a-tutor" className="hover:text-emerald-700">Become a Tutor</a>
+              <a href="/blog" className="hover:text-emerald-700">Blog</a>
+              <a href="/interest" className="hover:text-emerald-700">Get Started</a>
+            </nav>
             <div className="flex flex-col sm:flex-row items-center justify-between">
               <div className="flex items-center space-x-2 mb-2 sm:mb-0">
                 <div className="p-2 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-lg">
