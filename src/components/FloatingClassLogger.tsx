@@ -386,6 +386,24 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
     }
   }, [$, teacherId, setStatus, stopTimer, clearActive])
 
+  const loadStudents = useCallback(async () => {
+    try {
+      const res = await fetch('/api/teacher/students', { credentials: 'include' })
+      const data = await res.json()
+      const list: StudentOption[] = (data.students || []).filter((s: StudentOption) => !s.status || s.status === 'active')
+      studentsRef.current = list
+      const sel = $('fcl-select') as HTMLSelectElement | null
+      if (sel) {
+        // Preserve whatever is currently picked — rewriting innerHTML wipes the
+        // visible selection even though nothing about the pick actually changed.
+        const prevValue = sel.value || selectedRef.current
+        sel.innerHTML = `<option value="">Select a student…</option>` +
+          list.map(s => `<option value="${s.id}">${escapeHtml(s.student_name)}${s.subject ? ' — ' + escapeHtml(s.subject) : ''}</option>`).join('')
+        if (prevValue) sel.value = prevValue
+      }
+    } catch { setStatus('Could not load students') }
+  }, [$, setStatus])
+
   const wireWidget = useCallback((doc: Document) => {
     docRef.current = doc
     doc.getElementById('fcl-start')?.addEventListener('click', handleStart)
@@ -405,36 +423,28 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
     // so an eviction/relaunch never loses the pending pick.
     const selEl = doc.getElementById('fcl-select') as HTMLSelectElement | null
     if (selEl) {
-      if (selectedRef.current) selEl.value = selectedRef.current
+      const applySelection = () => {
+        if (selectedRef.current && selEl.value !== selectedRef.current) selEl.value = selectedRef.current
+      }
+      applySelection()
+      // Safety net: a freshly (re)built <select> in a brand-new PiP/fallback
+      // document has occasionally not reflected the assigned value in the
+      // very same tick — reapply once more right after this paints.
+      setTimeout(applySelection, 0)
       selEl.addEventListener('change', () => {
         selectedRef.current = selEl.value
         saveActive()
       })
     }
+    // If the roster wasn't loaded yet for some reason, fetch it now so the
+    // rebuilt widget never shows an empty dropdown.
+    if (studentsRef.current.length === 0) loadStudents()
     if (classLogIdRef.current && startTimeRef.current) {
       setRunningUI(true)
       stopTimer(); tick(); timerRef.current = setInterval(tick, 1000)
       setStatus('Class in progress')
     }
-  }, [handleStart, handleEnd, handleScreenshot, handleShare, handleAddLink, handleFiles, minimize, expand, setRunningUI, stopTimer, tick, setStatus, saveActive])
-
-  const loadStudents = useCallback(async () => {
-    try {
-      const res = await fetch('/api/teacher/students', { credentials: 'include' })
-      const data = await res.json()
-      const list: StudentOption[] = (data.students || []).filter((s: StudentOption) => !s.status || s.status === 'active')
-      studentsRef.current = list
-      const sel = $('fcl-select') as HTMLSelectElement | null
-      if (sel) {
-        // Preserve whatever is currently picked — rewriting innerHTML wipes the
-        // visible selection even though nothing about the pick actually changed.
-        const prevValue = sel.value || selectedRef.current
-        sel.innerHTML = `<option value="">Select a student…</option>` +
-          list.map(s => `<option value="${s.id}">${escapeHtml(s.student_name)}${s.subject ? ' — ' + escapeHtml(s.subject) : ''}</option>`).join('')
-        if (prevValue) sel.value = prevValue
-      }
-    } catch { setStatus('Could not load students') }
-  }, [$, setStatus])
+  }, [handleStart, handleEnd, handleScreenshot, handleShare, handleAddLink, handleFiles, minimize, expand, setRunningUI, stopTimer, tick, setStatus, saveActive, loadStudents])
 
   const openInPage = useCallback(() => {
     if (inPageHostRef.current) return
@@ -479,6 +489,22 @@ export default function FloatingClassLogger({ teacherId }: FloatingClassLoggerPr
   }, [loadStudents, loadActive, openPiP])
 
   useEffect(() => { setSupported('documentPictureInPicture' in window) }, [])
+
+  // Watchdog: cross-window PiP takeover (e.g. Google Meet requesting its own
+  // Document PiP, which forcibly closes ours) doesn't always fire `pagehide`
+  // reliably or promptly. Poll for a silently-closed PiP and rebuild the
+  // fallback panel — restoring the selected student — even if the event
+  // never arrives.
+  useEffect(() => {
+    const iv = setInterval(() => {
+      if (pipRef.current && pipRef.current.closed) {
+        pipRef.current = null
+        docRef.current = null
+        if (!inPageHostRef.current) openInPage()
+      }
+    }, 800)
+    return () => clearInterval(iv)
+  }, [openInPage])
 
   useEffect(() => {
     return () => {
